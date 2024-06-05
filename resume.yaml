@@ -1,0 +1,8 @@
+name: Adrian Cederberg
+email: adrn.cederberg123@gmail.com
+sections:
+  - title: Education
+    sections: 
+      - title: University of New Mexico
+        major: Applied Mathematics
+        total_gpa: 3.3
