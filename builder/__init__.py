@@ -107,6 +107,7 @@ class ResumeHandler:
     async def upsert_document(
         self,
         requests: Requests,
+        name: str,
         item: ResumeItemConfig,
     ) -> DocumentSchema:
 
@@ -137,7 +138,7 @@ class ResumeHandler:
                 res = await requests.d.create(
                     name=name,
                     description=item.description,
-                    content=item.create_content(),
+                    content=item.create_content(name),
                     public=False,
                 )
             case 1:
@@ -146,7 +147,7 @@ class ResumeHandler:
                     handler_data_search.data.data[0].uuid,
                     name=name,
                     description=item.description,
-                    content=item.create_content(),
+                    content=item.create_content(name),
                 )
             case _:
                 CONSOLE.print("[red]Too many results.")
@@ -163,14 +164,15 @@ class ResumeHandler:
 
         collection = await self.upsert_collection(requests)
         documents_tasks = (
-            self.upsert_document(requests, item) for item in self.config.data.items
+            self.upsert_document(requests, name, item)
+            for name, item in self.config.data.items.items()
         )
         documents = await asyncio.gather(*documents_tasks)
 
         # NOTE: Assignments. Note that create is imdempotent.
         uuid_document = list(document.uuid for document in documents)
 
-        logger.debug("Creating (imdempotently) assignments.")
+        logger.debug("Creating *imdempotently* assignments.")
         check_status = requests.handler.check_status
         adptr = TypeAdapter(AsOutput[List[AssignmentSchema]])
         res = await requests.a.c.create(collection.uuid, uuid_document=uuid_document)
