@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 # --------------------------------------------------------------------------- #
 # FROM extensions/text.py
 
-COLLECTION_DESCRIPTION = "Resume and supporting documents."
 LENGTH_MESSAGE: int = 1024
 LENGTH_CONTENT: int = 2**15
 LENGTH_FORMAT: int = 8

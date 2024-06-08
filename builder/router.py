@@ -18,8 +18,8 @@ from fastapi import Depends, HTTPException
 from pydantic import TypeAdapter
 from starlette.responses import HTMLResponse
 
-from builder import ContextData
-from builder.schemas import Config, Status
+from builder.controller import ContextData
+from builder.schemas import PATH_CONFIGS_BUILDER_DEFAULT, BuilderConfig, Config, Status
 
 
 def config() -> Config:
@@ -29,10 +29,17 @@ def config() -> Config:
 DependsConfig = Annotated[Config, Depends(config, use_cache=True)]
 
 
-def context(config: DependsConfig) -> ContextData:
+def builder() -> BuilderConfig:
+    return BuilderConfig.load(PATH_CONFIGS_BUILDER_DEFAULT)
+
+
+DependsBuilder = Annotated[BuilderConfig, Depends(builder, use_cache=True)]
+
+
+def context(config: DependsConfig, builder: DependsBuilder) -> ContextData:
     try:
         console_handler = ConsoleHandler(config=config)
-        return ContextData(config=config, console_handler=console_handler)  # type: ignore
+        return ContextData(config=config, builder=builder, console_handler=console_handler)  # type: ignore
     except Exception as err:
         print_tb(err.__traceback__)
         print(err)
@@ -42,21 +49,14 @@ def context(config: DependsConfig) -> ContextData:
 DependsContext = Annotated[ContextData, Depends(context, use_cache=True)]
 
 
-def status() -> Status:
-    print("HERE")
-    return mwargs(Status)
-
-
-DependsStatus = Annotated[Status, Depends(status, use_cache=True)]
-
-
 # NOTE: Restructured Text Should be passed in as Jinja Templates.
-class ResumeView(BaseView):
+# NOTE: ALL rendering should be done using the command line for now until I
+#       have time to add posting, etc.
+class TextView(BaseView):
 
     view_routes = dict(
         get_by_name_json="/{name}/json",
         get_by_name_html="/{name}",
-        # "get_terd": "/terd",
     )
 
     # NOTE: Will require own token to function for the moment. Should match
@@ -66,11 +66,13 @@ class ResumeView(BaseView):
     async def get_by_name_json(
         cls,
         context: DependsContext,
-        status: DependsStatus,
         name: str,
     ) -> AsOutput[DocumentSchema]:
+        """Get JSON data for the document."""
 
-        data = status.status.get(name)
+        status = context.builder.status.status
+        data = status.get(name)
+
         if data is None:
             raise HTTPException(404, detail="No such document.")
 
@@ -80,7 +82,6 @@ class ResumeView(BaseView):
 
         # NOTE: At some point this should be written as a handler instead.
         if 200 <= res.status_code < 300:
-            print(res.json())
             final = TypeAdapter(AsOutput[DocumentSchema]).validate_json(res.content)
             return final
 
@@ -97,12 +98,14 @@ class ResumeView(BaseView):
     async def get_by_name_html(
         cls,
         context: DependsContext,
-        status: DependsStatus,
         name: str,
     ):
+        """Get RST document."""
+
         # NOTE: These documents should be built before, not `on the fly`. All
         #       document building should happen outside of app run.
-        data = await cls.get_by_name_json(context, status, name)
+        status = context.builder.status.status
+        data = await cls.get_by_name_json(context, name)
         content = data.data.content["text"]["content"]
 
         parser = publish_string(content, writer_name="html")
