@@ -1,6 +1,6 @@
 import asyncio
 from os import path
-from typing import List
+from typing import Dict, List, Tuple
 
 import typer
 
@@ -75,7 +75,7 @@ class TextController:
 
         # NOTE: Look for name matching tags.
         logger.debug("Checking collection status.")
-        name = self.fmt_name.format("resume")
+        name = self.fmt_name.format(self.builder.data.collection.name)
         res = await requests.u.search(
             profile.uuid_user,
             child=fields.ChildrenUser.collections,
@@ -92,14 +92,14 @@ class TextController:
         if err is not None:
             raise err
 
-        # NOTE: LMAO. Create if not exists.
+        # NOTE: Create if not exists.
         match len(data := handler_data_search.data.data):
             case 0:
                 logger.debug("Creating collection.")
                 res = await requests.c.create(
                     name=name,
                     content=None,
-                    description=snippets.COLLECTION_DESCRIPTION,
+                    description=self.builder.data.collection.description,
                     public=False,
                 )
 
@@ -123,20 +123,22 @@ class TextController:
         requests: Requests,
         name: str,
         item: TextItemConfig,
-    ) -> DocumentSchema:
-        """Upsert document item."""
+    ) -> Dict[snippets.Format, DocumentSchema]:
+        """Upsert document items. Each document should be stored in raw form
+        and as html.
+        """
 
         profile = self.config.profile
         check_status = requests.handler.check_status
         assert profile is not None
 
-        name_full = self.fmt_name.format(name)
+        fmt_name_full = self.fmt_name.format(name) + "-{}"
         filename = path.join(self.builder.path_docs, item.content_file)
-        logger.debug("Creating document `%s`.", name_full)
+        logger.debug("Creating document `%s`.", name)
         res = await requests.u.search(
             profile.uuid_user,
             child=fields.ChildrenUser.documents,
-            name_like=name_full,
+            name_like=self.fmt_name.format(name),
         )
 
         handler_data_search: RequestHandlerData[AsOutput[List[DocumentSchema]]]
@@ -148,46 +150,62 @@ class TextController:
             raise err
 
         adptr = TypeAdapter(AsOutput[DocumentSchema])
+        status: int
         match len(handler_data_search.data.data):
             case 0:
-                logger.debug("Creating document `%s`.", name_full)
-                res = await requests.d.create(
-                    name=name_full,
-                    description=item.description,
-                    content=item.create_content(filename),
-                    public=False,
+                logger.debug("Creating documents for `%s`.", name)
+                status = 201
+                tasks = (
+                    requests.d.create(
+                        name=fmt_name_full.format(fmt.name),
+                        description=item.description,
+                        content=content,  # type: ignore
+                        public=False,
+                    )
+                    for fmt, content in item.create_content(filename).items()
                 )
-            case 1:
-                logger.debug("Updating document `%s`.", name_full)
-                res = await requests.d.update(
-                    handler_data_search.data.data[0].uuid,
-                    name=name_full,
-                    description=item.description,
-                    content=item.create_content(filename),
+            case 2:
+                logger.debug("Updating documents for `%s`.", name)
+                status = 200
+                tasks = (
+                    requests.d.update(
+                        handler_data_search.data.data[0].uuid,
+                        name=fmt_name_full.format(fmt.name),
+                        description=item.description,
+                        content=content,
+                    )
+                    for fmt, content in item.create_content(filename).items()
                 )
             case _:
-                print(handler_data_search.data.data)
                 CONSOLE.print("[red]Too many results.")
                 raise typer.Exit(1)
 
-        handler_data: RequestHandlerData[AsOutput[DocumentSchema]]
-        (handler_data,), err = check_status(res, expect_status=200, adapter=adptr)
+        res = await asyncio.gather(*tasks)
+        handler_datas: Tuple[RequestHandlerData[AsOutput[DocumentSchema]], ...]
+        handler_datas, err = check_status(res, expect_status=status, adapter=adptr)
         if err is not None:
             raise err
 
-        return handler_data.data.data
+        return {
+            snippets.Format((data := hd.data.data).content["text"]["format"]): data
+            for hd in handler_datas
+        }
 
     async def upsert(self, requests: Requests) -> TextDataStatus:
 
         collection = await self.upsert_collection(requests)
         documents_tasks = (
             self.upsert_document(requests, name, item)
-            for name, item in self.data.items.items()
+            for name, item in self.data.documents.items()
         )
-        documents = await asyncio.gather(*documents_tasks)
+        documents_items = await asyncio.gather(*documents_tasks)
 
         # NOTE: Assignments. Note that create is imdempotent.
-        uuid_document = list(document.uuid for document in documents)
+        uuid_document = list(
+            document.uuid
+            for documents in documents_items
+            for document in documents.values()
+        )
 
         logger.debug("Creating *imdempotently* assignments.")
         check_status = requests.handler.check_status
@@ -199,17 +217,12 @@ class TextController:
 
         res = await requests.a.c.read(collection.uuid, uuid_document=uuid_document)
         (data_assignments,), err = check_status(res, adapter=adptr)
+        if err is not None:
+            raise err
 
         return TextDataStatus.fromData(
             self.data,
             collection=collection,
-            documents=documents,
+            documents=documents_items,
             assignments=data_assignments.data.data,
         )
-
-    # async def render_document(self, name: str) -> str:
-    #
-    #     output = path.join(self.context_data.builder.path_docs, "{name}.html")
-    #     parser = publish_string(content, writer_name="html")
-    #
-    #     return

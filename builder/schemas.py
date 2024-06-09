@@ -1,8 +1,6 @@
-import json
 from os import path
 from typing import Annotated, Any, Dict, List, Self
 
-import typer
 import yaml
 
 # --------------------------------------------------------------------------- #
@@ -14,11 +12,12 @@ from app.schemas import (
     CollectionSchema,
     DocumentSchema,
     computed_field,
+    mwargs,
 )
 from client import Config as ClientConfig
 from client.config import YamlSettingsConfigDict
-from pydantic import BaseModel, Field
-from yaml_settings_pydantic import BaseYamlSettings, YamlFileConfigDict
+from docutils.core import publish_parts
+from pydantic import Field
 
 from builder import snippets
 
@@ -49,28 +48,55 @@ class TextItemConfig(BaseHashable):
     ]
     description: fields.FieldDescription
 
-    def create_content(self, filepath: str) -> Dict[str, Any]:
+    def create_content(self, filepath: str) -> Dict[snippets.Format, Dict[str, Any]]:
+        # if writers is None:
+        #     writers = {"html"}
+
         logger.debug("Building content for `%s`.", filepath)
         tags = ["resume"]
         with open(filepath, "r") as file:
-            content = "\n".join(file.readlines())
+            content_rst = "\n".join(file.readlines())
+            content = dict(rst=content_rst)
 
-        text = snippets.TextSchema(
-            format=snippets.Format.rst, content=content, tags=tags
-        )
-        return dict(text=text.model_dump(mode="json"))
+        content_html = str(publish_parts(content_rst, writer_name="html"))
+        content.update(html=content_html)
+
+        texts = {
+            snippets.Format(format): dict(
+                text=mwargs(
+                    snippets.TextSchema,
+                    format=format,
+                    content=content,
+                    tags=tags,
+                ).model_dump(mode="json")
+            )
+            for format, content in content.items()
+        }
+        return texts
+
+
+class TextCollectionConfig(BaseHashable):
+    name: Annotated[
+        str,
+        Field(
+            description=(
+                "The name to give this collection. For the actual name in "
+                "captura, see ``StatusDataConfig.collection_name_captura``."
+            )
+        ),
+    ]
+    description: Annotated[
+        str, Field(description="The description to give this collection.")
+    ]
 
 
 class TextDataConfig(BaseHashable):
-    items: Annotated[
+    collection: TextCollectionConfig
+    documents: Annotated[
         Dict[str, TextItemConfig],
-        Field(description="Text items to add to the api as documents."),
+        Field(description="Text documents to add to the api as documents."),
     ]
 
-    collection_name: Annotated[
-        str,
-        Field(description="The name to give this collection."),
-    ]
     identifier: Annotated[
         str,
         Field(
@@ -86,26 +112,37 @@ class TextDataConfig(BaseHashable):
     ]
 
     def get(self, name: str) -> TextItemConfig | None:
-        return self.items.get(name)
+        return self.documents.get(name)
 
 
 # --------------------------------------------------------------------------- #
 
 
-class TextItemStatus(TextItemConfig):
-    name: str
+class RenderedDocumentStatus(BaseHashable):
+    name_captura: str
     uuid: fields.FieldUUID
     uuid_assignment: fields.FieldUUID
+    format: snippets.Format
+
+
+class TextItemStatus(TextItemConfig, RenderedDocumentStatus):
+    # ``captura`` is included since display names are not included.
+
+    renders: "List[RenderedDocumentStatus]"
+
+
+class TextItemCollectionStatus(TextCollectionConfig):
+    uuid: fields.FieldUUID
+    name_captura: str
 
 
 class TextDataStatus(BaseHashable):
-    items: Dict[str, TextItemStatus]
+    documents: Dict[str, TextItemStatus]
+    collection: TextItemCollectionStatus
     identifier: str
-    collection_uuid: fields.FieldUUID
-    collection_name_captura: str
 
     def get(self, name: str) -> TextItemStatus | None:
-        return self.items.get(name)
+        return self.documents.get(name)
 
     @classmethod
     def fromData(
@@ -113,26 +150,42 @@ class TextDataStatus(BaseHashable):
         data: TextDataConfig,
         *,
         collection: CollectionSchema,
-        documents: List[DocumentSchema],
+        documents: List[Dict[snippets.Format, DocumentSchema]],
         assignments: List[AssignmentSchema],
     ) -> Self:
 
         identifier = data.identifier
 
-        yucky = zip(documents, assignments, data.items.items())
+        print(documents)
+        yucky = zip(documents, assignments, data.documents.items())
         return cls(
             identifier=identifier,
-            collection_uuid=collection.uuid,
-            collection_name_captura=collection.name,
-            items={
+            collection=TextItemCollectionStatus(
+                uuid=collection.uuid,
+                name_captura=collection.name,
+                name=data.collection.name,
+                description=data.collection.description,
+            ),
+            documents={
                 name: TextItemStatus(
                     content_file=item.content_file,
-                    name=doc.name,
-                    uuid=doc.uuid,
+                    name_captura=(doc_rst := docs[snippets.Format.rst]).name,
+                    uuid=doc_rst.uuid,
                     uuid_assignment=assign.uuid,
-                    description=doc.description,
+                    description=doc_rst.description,
+                    format=snippets.Format.rst,
+                    renders=[
+                        RenderedDocumentStatus(
+                            name_captura=doc.name,
+                            uuid=doc.uuid,
+                            uuid_assignment=assign.uuid,
+                            format=fmt,
+                        )
+                        for fmt, doc in docs.items()
+                        if fmt != snippets.Format.rst
+                    ],
                 )
-                for doc, assign, (name, item) in yucky
+                for docs, assign, (name, item) in yucky
             },
         )
 
@@ -205,8 +258,10 @@ class BuilderConfig(BaseYaml, BaseHashable):
 
     @computed_field
     @functools.cached_property
-    def status(self) -> Status:
-        return Status.load(self.path_status)
+    def status(self) -> Status | None:
+        if path.exists(self.path_status):
+            return Status.load(self.path_status)
+        return None
 
     path_docs: Annotated[str, Field(default=PATH_DOCS_DEFUALT)]
     data: Annotated[TextDataConfig, Field()]

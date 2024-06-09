@@ -1,7 +1,6 @@
 import asyncio
-import traceback
 from os import path
-from typing import Annotated, Literal
+from typing import Annotated
 
 import httpx
 import typer
@@ -14,11 +13,8 @@ from app.schemas import AsOutput, DocumentSchema, mwargs
 from client.handlers import CONSOLE, BaseHandlerData
 from client.requests import Requests
 from docutils.core import publish_parts
-from fastapi import FastAPI, HTTPException, Request, Response
-from starlette.responses import JSONResponse
 
 from builder.controller import ContextData, TextController
-from builder.router import TextView
 from builder.schemas import Status
 
 # --------------------------------------------------------------------------- #
@@ -69,6 +65,7 @@ def cmd_status(_context: typer.Context):
 
     if not path.exists(context_data.builder.path_status):
         CONSOLE.print("[green]No status yet.")
+        raise typer.Exit(1)
 
     status = builder.status
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
@@ -80,6 +77,7 @@ def cmd_run(_context: typer.Context):
 
     if not path.exists(context_data.builder.path_status):
         CONSOLE.print("[green]No status yet.")
+        raise typer.Exit(1)
 
     uvicorn.run("builder.__main__:app", port=8000, host="0.0.0.0", reload=True)
 

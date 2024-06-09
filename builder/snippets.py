@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 # FROM extensions/text.py
 
 LENGTH_MESSAGE: int = 1024
-LENGTH_CONTENT: int = 2**15
+LENGTH_CONTENT: int = 2**18
 LENGTH_FORMAT: int = 8
 
 
@@ -17,6 +17,7 @@ logger = util.get_logger(__name__)
 
 
 class Format(str, enum.Enum):
+    html = "html"
     md = "md"
     rst = "rst"
     tEx = "tEx"
