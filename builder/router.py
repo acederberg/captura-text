@@ -1,8 +1,9 @@
-"""Router. 
+"""Router for uploaded documents.
 
-This module will attempt to figure what what will be needed to build an 
-extension.
-
+Documents can only be uploaded using the command line for the moment. To provide
+the necessary status for this to serve these documents, run ``builder up`` to 
+add your documents to a captura instance. Once this command has been run, find
+your ``.builder.status.yaml`` and use its contents to deploy this app.
 """
 
 from traceback import print_tb
@@ -15,6 +16,7 @@ from client.handlers import AssertionHandler, ConsoleHandler
 from client.requests import httpx
 from docutils.core import publish_string
 from fastapi import Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import TypeAdapter
 from starlette.responses import HTMLResponse
 
@@ -71,8 +73,7 @@ class TextView(BaseView):
 
     view_routes = dict(
         get_by_name_json="/{name}/json",
-        get_by_name_raw="/{name}/raw",
-        get_by_name_html="/{name}",
+        get_by_name="/{name}",
     )
 
     # NOTE: Will require own token to function for the moment. Should match
@@ -85,15 +86,11 @@ class TextView(BaseView):
         status: DependsStatus,
         *,
         name: str,
-        format: Format,
     ) -> AsOutput[DocumentSchema]:
         """Get JSON data for the document."""
 
         if (data := status.status.get(name)) is None:
             raise HTTPException(404, detail="No such document.")
-
-        if format != Format.rst:
-            data = data.renders[0]  # NOTE: Because for now there is exactly 1.
 
         async with httpx.AsyncClient() as client:
             requests = Requests(context, client)
@@ -114,27 +111,7 @@ class TextView(BaseView):
         )
 
     @classmethod
-    async def get_by_name_raw(
-        cls,
-        context: DependsContext,
-        status: DependsStatus,
-        *,
-        name: str,
-        format: Format,
-    ) -> str:
-        """Get document text."""
-
-        data = await cls.get_by_name_json(
-            context,
-            status,
-            name=name,
-            format=format,
-        )
-        content = data.data.content["text"]["content"]
-        return content
-
-    @classmethod
-    async def get_by_name_html(
+    async def get_by_name(
         cls,
         context: DependsContext,
         status: DependsStatus,
@@ -145,11 +122,10 @@ class TextView(BaseView):
 
         # NOTE: These documents should be built before, not `on the fly`. All
         #       document building should happen outside of app run.
-        content = await cls.get_by_name_raw(
+        data = await cls.get_by_name_json(
             context,
             status,
             name=name,
-            format=Format.html,
         )
-
+        content = data.data.content["text"]["content"]
         return HTMLResponse(content)

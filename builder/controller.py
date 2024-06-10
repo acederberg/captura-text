@@ -22,11 +22,13 @@ from pydantic import TypeAdapter
 from builder import snippets
 from builder.schemas import (
     PATH_CONFIGS_BUILDER_DEFAULT,
+    BaseObjectStatus,
     BuilderConfig,
     Config,
     Status,
     TextDataConfig,
     TextDataStatus,
+    TextItemCollectionStatus,
     TextItemConfig,
     TextItemStatus,
 )
@@ -73,201 +75,100 @@ class TextController:
         self.data = self.builder.data
         self.fmt_name = f"{{}}-{self.data.identifier}"
 
-    def check_one(self, requests: Requests, res, **kwargs):
-        (data_assignments,), err = requests.handler.check_status(res, **kwargs)
-        if err is not None:
-            raise err
-
-        return data_assignments.data
-
-    async def upsert_collection(
+    # NOTE: Moving discovery out of here gaurentees that status exists.
+    async def ensure_collection(
         self,
         requests: Requests,
-    ) -> CollectionSchema:
+    ) -> TextItemCollectionStatus:
         """Update the collection in captura."""
+        collection_config = self.builder.data.collection
+        name = collection_config.name
 
-        profile = self.config.profile
-        check_status = requests.handler.check_status
-        assert profile is not None
+        collection = await self.builder.data.discover_collection(requests, name)
+        if collection is None:
+            collection = await self.builder.data.create_collection(requests, name)
 
-        # NOTE: Look for name matching tags.
-        logger.debug("Checking collection status.")
-        name = self.fmt_name.format(self.builder.data.collection.name)
-        res = await requests.u.search(
-            profile.uuid_user,
-            child=fields.ChildrenUser.collections,
-            name_like=name,
+        return TextItemCollectionStatus(
+            name=collection.name,
+            description=collection.description,
+            name_captura=collection.name,
+            uuid=collection.uuid,
+            deleted=False,
         )
 
-        handler_data_search: RequestHandlerData[AsOutput[List[CollectionSchema]]]
-        adptr = TypeAdapter(AsOutput[List[CollectionSchema]])
-        (handler_data_search,), err = check_status(
-            res,
-            expect_status=200,
-            adapter=adptr,
-        )
-        if err is not None:
-            raise err
-
-        # NOTE: Create if not exists.
-        match len(data := handler_data_search.data.data):
-            case 0:
-                logger.debug("Creating collection.")
-                res = await requests.c.create(
-                    name=name,
-                    content=None,
-                    description=self.builder.data.collection.description,
-                    public=False,
-                )
-
-                handler_data: RequestHandlerData[AsOutput[CollectionSchema]]
-                (handler_data,), err = check_status(
-                    res, expect_status=201, adapter=adptr
-                )
-                if err is not None:
-                    raise err
-
-                return handler_data.data.data
-            case 1:
-                logger.debug("Collection already exists.")
-                return data[0]
-            case _:
-                CONSOLE.print("[red]Too many results.")
-                raise typer.Exit(1)
-
-    async def upsert_document(
+    async def ensure_document(
         self,
         requests: Requests,
         name: str,
-        item: TextItemConfig,
-    ) -> Dict[snippets.Format, DocumentSchema]:
+    ) -> TextItemStatus:
         """Upsert document items. Each document should be stored in raw form
         and as html.
         """
 
-        profile = self.config.profile
-        check_status = requests.handler.check_status
-        assert profile is not None
+        item = self.builder.data.require(name)
+        document = await self.builder.data.discover_document(requests, name)
+        if document is None:
+            document = await self.builder.data.create_document(requests, name)
 
-        fmt_name_full = self.fmt_name.format(name) + "-{}"
-        filename = path.join(self.builder.path_docs, item.content_file)
-        logger.debug("Creating document `%s`.", name)
-        res = await requests.u.search(
-            profile.uuid_user,
-            child=fields.ChildrenUser.documents,
-            name_like=self.fmt_name.format(name),
+        return TextItemStatus(
+            uuid=document.uuid,
+            name=name,
+            name_captura=document.name,
+            deleted=False,
+            format_out=item.format_out,
+            content_file=item.content_file,
+            description=item.description,
+            format_in=item.format_in,
         )
 
-        handler_data_search: RequestHandlerData[AsOutput[List[DocumentSchema]]]
-        adptr_search = TypeAdapter(AsOutput[List[DocumentSchema]])
-        (handler_data_search,), err = check_status(
-            res, expect_status=200, adapter=adptr_search
-        )
-        if err is not None:
-            raise err
+    async def ensure(self, requests: Requests) -> TextDataStatus:
 
-        adptr = TypeAdapter(AsOutput[DocumentSchema])
-        status: int
-        match len(handler_data_search.data.data):
-            case 0:
-                logger.debug("Creating documents for `%s`.", name)
-                status = 201
-                tasks = (
-                    requests.d.create(
-                        name=fmt_name_full.format(fmt.name),
-                        description=item.description,
-                        content=content,  # type: ignore
-                        public=False,
-                    )
-                    for fmt, content in item.create_content(filename).items()
-                )
-            case 2:
-                logger.debug("Updating documents for `%s`.", name)
-                status = 200
-                tasks = (
-                    requests.d.update(
-                        uuid,
-                        name=fmt_name_full.format(fmt.name),
-                        description=item.description,
-                        content=content,  # type: ignore
-                    )
-                    for (fmt, content), uuid in zip(
-                        item.create_content(filename).items(),
-                        (item.uuid for item in handler_data_search.data.data),
-                    )
-                )
-            case _:
-                CONSOLE.print("[red]Too many results.")
-                raise typer.Exit(1)
-
-        res = await asyncio.gather(*tasks)
-        handler_datas: Tuple[RequestHandlerData[AsOutput[DocumentSchema]], ...]
-        handler_datas, err = check_status(res, expect_status=status, adapter=adptr)
-        if err is not None:
-            raise err
-
-        return {
-            snippets.Format((data := hd.data.data).content["text"]["format"]): data
-            for hd in handler_datas
-        }
-
-    async def upsert(self, requests: Requests) -> TextDataStatus:
-
-        collection = await self.upsert_collection(requests)
         documents_tasks = (
-            self.upsert_document(requests, name, item)
-            for name, item in self.data.documents.items()
+            self.ensure_document(requests, name) for name in self.data.documents
         )
-        documents_items = await asyncio.gather(*documents_tasks)
+
+        documents: Dict[str, TextItemStatus]
+        documents = {v.name: v for v in await asyncio.gather(*documents_tasks)}
+        collection = await self.ensure_collection(requests)
 
         # NOTE: Assignments. Note that create is imdempotent.
-        uuid_document = list(
-            document.uuid
-            for documents in documents_items
-            for document in documents.values()
-        )
+        uuid_document = list(document.uuid for document in documents.values())
 
-        logger.debug("Creating *imdempotently* assignments.")
+        logger.debug("Creating assignments (imdempotently).")
         check_status = requests.handler.check_status
         adptr = TypeAdapter(AsOutput[List[AssignmentSchema]])
         res = await requests.a.c.create(collection.uuid, uuid_document=uuid_document)
-        (data_assignments,), err = check_status(res, expect_status=201, adapter=adptr)
+        (_,), err = check_status(res, expect_status=201, adapter=adptr)
         if err is not None:
             raise err
 
-        res = await requests.a.c.read(collection.uuid, uuid_document=uuid_document)
-        (data_assignments,), err = check_status(res, adapter=adptr)
-        if err is not None:
-            raise err
-
-        return TextDataStatus.fromData(
-            self.data,
+        data = self.builder.data
+        return TextDataStatus(
+            identifier=data.identifier,
+            documents=documents,
             collection=collection,
-            documents=documents_items,
-            assignments=data_assignments.data.data,
+            path_docs=data.path_docs,
         )
 
     # NOTE: Only return status when status has been changed.
     async def destroy(self, requests: Requests) -> TextDataStatus:
 
-        status = self.status.model_copy()
-        document_uuids = tuple(
-            itertools.chain(
-                *(
-                    tuple(item.uuid for item in (*item_rst.renders, item_rst))
-                    for item_rst in status.documents.values()
-                )
-            )
+        status = self.status
+        documents_status = await asyncio.gather(
+            *(status.destroy_document(requests, name) for name in status.documents)
         )
-        document_reqs = map(requests.d.delete, document_uuids)
-        collection_req = requests.c.delete(status.collection.uuid)
+        collection_status = await status.destroy_collection(requests)
 
-        results = await asyncio.gather(collection_req, *document_reqs)
-        tuple(
-            map(
-                lambda res: self.check_one(requests, res),
-                results,
-            )
+        return TextDataStatus(
+            documents={status.name: status for status in documents_status},
+            collection=collection_status,
+            identifier=status.identifier,
+            path_docs=status.path_docs,
         )
 
-        return status
+    async def update(self, requests: Requests) -> None:
+        status = self.status
+        await asyncio.gather(
+            *(status.update_document(requests, name) for name in status.documents)
+        )
+        await status.update_collection(requests)

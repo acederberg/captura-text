@@ -1,13 +1,14 @@
 from os import path
-from typing import Annotated, Any, Dict, List, Self
+from typing import Annotated, Any, ClassVar, Dict, List, Literal, Self, Set
 
 import yaml
 
 # --------------------------------------------------------------------------- #
-from app import fields, util
+from app import ChildrenUser, KindObject, fields, util
 from app.auth import functools
 from app.config import BaseHashable
 from app.schemas import (
+    AsOutput,
     AssignmentSchema,
     CollectionSchema,
     DocumentSchema,
@@ -16,6 +17,8 @@ from app.schemas import (
 )
 from client import Config as ClientConfig
 from client.config import YamlSettingsConfigDict
+from client.handlers import RequestHandlerData, TypeAdapter
+from client.requests import Requests
 from docutils.core import publish_parts
 from pydantic import Field
 
@@ -36,7 +39,13 @@ def here(*v: str):
     return path.join(PATH_HERE, *v)
 
 
-class TextItemConfig(BaseHashable):
+class BaseObjectConfig(BaseHashable):
+    kind: ClassVar[KindObject]
+
+
+class TextItemConfig(BaseObjectConfig):
+    kind = KindObject.document
+
     content_file: Annotated[
         str,
         Field(
@@ -47,35 +56,31 @@ class TextItemConfig(BaseHashable):
         ),
     ]
     description: fields.FieldDescription
+    format_in: Literal[snippets.Format.rst]
+    format_out: Literal[snippets.Format.rst, snippets.Format.html]
 
-    def create_content(self, filepath: str) -> Dict[snippets.Format, Dict[str, Any]]:
-        # if writers is None:
-        #     writers = {"html"}
-
+    def create_content(self, filepath: str) -> Dict[str, Any]:
         logger.debug("Building content for `%s`.", filepath)
         tags = ["resume"]
         with open(filepath, "r") as file:
-            content_rst = "".join(file.readlines())
-            content = dict(rst=content_rst)
+            content = "".join(file.readlines())
 
-        content_html = str(publish_parts(content_rst, writer_name="html")["html_body"])
-        content.update(html=content_html)
+        if self.format_out == snippets.Format.html:
+            content = str(publish_parts(content, writer_name="html")["html_body"])
 
-        texts = {
-            snippets.Format(format): dict(
-                text=mwargs(
-                    snippets.TextSchema,
-                    format=format,
-                    content=content,
-                    tags=tags,
-                ).model_dump(mode="json")
-            )
-            for format, content in content.items()
-        }
-        return texts
+        return dict(
+            text=mwargs(
+                snippets.TextSchema,
+                format=self.format_out,
+                content=content,
+                tags=tags,
+            ).model_dump(mode="json")
+        )
 
 
-class TextCollectionConfig(BaseHashable):
+class TextCollectionConfig(BaseObjectConfig):
+    kind = KindObject.collection
+
     name: Annotated[
         str,
         Field(
@@ -96,6 +101,7 @@ class TextDataConfig(BaseHashable):
         Dict[str, TextItemConfig],
         Field(description="Text documents to add to the api as documents."),
     ]
+    path_docs: str
 
     identifier: Annotated[
         str,
@@ -114,80 +120,238 @@ class TextDataConfig(BaseHashable):
     def get(self, name: str) -> TextItemConfig | None:
         return self.documents.get(name)
 
+    def require(self, name: str) -> TextItemConfig:
+        v = self.get(name)
+        if v is None:
+            raise ValueError(f"No such text item ``{name}``.")
+
+        return v
+
+    async def discover_document(
+        self,
+        requests: Requests,
+        name: str,
+    ) -> DocumentSchema | None:
+        """Try to find uuid corresponding to the identifier.
+
+        For more on the document name on the captura side, please see the
+        description of ``identifier``. To discover and create
+        ``TextDataStatus``, please see ``TextDataStaus.discover``.
+        """
+
+        name_captura = f"{name}-{self.identifier}"
+        adptr = TypeAdapter(AsOutput[List[DocumentSchema]])
+        item = self.require(name)
+        name_captura += f"-{item.format_out.name}"
+
+        res = await requests.users.search(
+            requests.context.config.profile.uuid_user,  # type: ignore
+            child=ChildrenUser.documents,
+            name_like=name_captura,
+        )
+        return self.check_discover(requests, res, adapter=adptr)
+
+    async def discover_collection(
+        self,
+        requests: Requests,
+        name: str,
+    ) -> CollectionSchema | None:
+        name_captura = f"{self.collection.name}-{self.identifier}"
+        adptr = TypeAdapter(AsOutput[List[DocumentSchema]])
+
+        res = await requests.users.search(
+            requests.context.config.profile.uuid_user,  # type: ignore
+            child=ChildrenUser.collections,
+            name_like=name_captura,
+        )
+        return self.check_discover(requests, res, adapter=adptr)
+
+    def check_discover(self, requests, res, **kwargs):
+        (handler_data,), err = requests.handler.check_status(res, **kwargs)
+        if err is not None:
+            raise err
+
+        if handler_data.data.kind is None:
+            return None
+        elif len(items := handler_data.data.data) == 1:
+            return items[0]
+        else:
+            raise ValueError("Too many results.")
+
+    async def create_document(
+        self,
+        requests: Requests,
+        name: str,
+    ) -> DocumentSchema:
+        """Upsert a document by name.
+
+        This returns the raw data from captura. Tranformation into ``status``
+        is done within ``controller`` as is bulk upsertion.
+        """
+
+        item = self.require(name)
+        name_captura = f"{name}-{self.identifier}-{item.format_out.name}"
+        filename = path.join(self.path_docs, item.content_file)
+        content = item.create_content(filename)
+
+        res = await requests.d.create(
+            name=name_captura,
+            description=item.description,
+            content=content,  # type: ignore
+            public=False,
+        )
+
+        handler_data: RequestHandlerData[AsOutput[CollectionSchema]]
+
+        adptr = TypeAdapter(AsOutput[DocumentSchema])
+        (handler_data,), err = requests.handler.check_status(
+            res, expect_status=201, adapter=adptr
+        )
+        if err is not None:
+            raise err
+
+        return handler_data.data.data
+
+    async def create_collection(
+        self, requests: Requests, name: str
+    ) -> CollectionSchema:
+        logger.debug("Creating collection.")
+        name_captura = f"{name}-{self.identifier}"
+        res = await requests.c.create(
+            name=name_captura,
+            content=None,
+            description=self.collection.description,
+            public=False,
+        )
+
+        handler_data: RequestHandlerData[AsOutput[CollectionSchema]]
+
+        adptr = TypeAdapter(AsOutput[CollectionSchema])
+        (handler_data,), err = requests.handler.check_status(
+            res, expect_status=201, adapter=adptr
+        )
+        if err is not None:
+            raise err
+
+        return handler_data.data.data
+
 
 # --------------------------------------------------------------------------- #
 
 
-class RenderedDocumentStatus(BaseHashable):
+class BaseObjectStatus(BaseObjectConfig):
+
     name_captura: str
     uuid: fields.FieldUUID
-    uuid_assignment: fields.FieldUUID
-    format: snippets.Format
+    deleted: Annotated[bool, Field(default=True)]
 
 
-class TextItemStatus(TextItemConfig, RenderedDocumentStatus):
-    # ``captura`` is included since display names are not included.
-
-    destroyed: Annotated[bool, Field(default=False)]
-    renders: "List[RenderedDocumentStatus]"
+class TextItemStatus(BaseObjectStatus, TextItemConfig):
+    name: str
 
 
-class TextItemCollectionStatus(TextCollectionConfig):
-    uuid: fields.FieldUUID
-    name_captura: str
+class TextItemCollectionStatus(BaseObjectStatus, TextCollectionConfig): ...
 
 
 class TextDataStatus(BaseHashable):
     documents: Dict[str, TextItemStatus]
     collection: TextItemCollectionStatus
+    path_docs: str
     identifier: str
 
     def get(self, name: str) -> TextItemStatus | None:
         return self.documents.get(name)
 
-    @classmethod
-    def fromData(
-        cls,
-        data: TextDataConfig,
-        *,
-        collection: CollectionSchema,
-        documents: List[Dict[snippets.Format, DocumentSchema]],
-        assignments: List[AssignmentSchema],
-    ) -> Self:
+    def require(self, name: str) -> TextItemStatus:
+        v = self.get(name)
+        if v is None:
+            raise ValueError(f"No such text item ``{name}``.")
 
-        identifier = data.identifier
+        return v
 
-        yucky = zip(documents, assignments, data.documents.items())
-        return cls(
-            identifier=identifier,
-            collection=TextItemCollectionStatus(
-                uuid=collection.uuid,
-                name_captura=collection.name,
-                name=data.collection.name,
-                description=data.collection.description,
-            ),
-            documents={
-                name: TextItemStatus(
-                    content_file=item.content_file,
-                    name_captura=(doc_rst := docs[snippets.Format.rst]).name,
-                    uuid=doc_rst.uuid,
-                    uuid_assignment=assign.uuid,
-                    description=doc_rst.description,
-                    format=snippets.Format.rst,
-                    renders=[
-                        RenderedDocumentStatus(
-                            name_captura=doc.name,
-                            uuid=doc.uuid,
-                            uuid_assignment=assign.uuid,
-                            format=fmt,
-                        )
-                        for fmt, doc in docs.items()
-                        if fmt != snippets.Format.rst
-                    ],
-                )
-                for docs, assign, (name, item) in yucky
-            },
+    async def update_document(
+        self,
+        requests: Requests,
+        name: str,
+    ) -> None:
+        """Upsert a document by name.
+
+        This returns the raw data from captura. Tranformation into ``status``
+        is done within ``controller`` as is bulk upsertion.
+        """
+
+        item = self.require(name)
+        name_captura = f"{name}-{self.identifier}-{item.format_out.name}"
+        status = 200
+        filename = path.join(self.path_docs, item.content_file)
+        content = item.create_content(filename)
+
+        res = await requests.d.update(
+            item.uuid,
+            name=name_captura,
+            description=item.description,
+            content=content,  # type: ignore
         )
+
+        adptr_search = TypeAdapter(AsOutput[DocumentSchema])
+        (_,), err = requests.handler.check_status(
+            res, expect_status=status, adapter=adptr_search
+        )
+        if err is not None:
+            raise err
+
+        return None
+
+    async def update_collection(
+        self,
+        requests: Requests,
+    ) -> None:
+        """Upsert a document by name.
+
+        This returns the raw data from captura. Tranformation into ``status``
+        is done within ``controller`` as is bulk upsertion.
+        """
+
+        name_captura = f"{self.collection.name}-{self.identifier}"
+        status = 200
+
+        res = await requests.c.update(
+            self.collection.uuid,
+            name=name_captura,
+            description=self.collection.description,
+        )
+
+        adptr = TypeAdapter(AsOutput[CollectionSchema])
+        (_,), err = requests.handler.check_status(
+            res, expect_status=status, adapter=adptr
+        )
+        if err is not None:
+            raise err
+
+    async def destroy_document(
+        self,
+        requests: Requests,
+        name: str,
+    ) -> TextItemStatus:
+        item = self.require(name)
+        res = await requests.d.delete(item.uuid)
+        (_,), err = requests.handler.check_status(res)
+        if err is not None:
+            raise err
+
+        out = item.model_copy()
+        out.deleted = True
+        return out
+
+    async def destroy_collection(self, requests: Requests) -> TextItemCollectionStatus:
+        res = await requests.c.delete(self.collection.uuid)
+        (_,), err = requests.handler.check_status(res)
+        if err is not None:
+            raise err
+
+        out = self.collection.model_copy()
+        out.deleted = True
+        return out
 
 
 class BaseYaml:
@@ -254,7 +418,7 @@ class BuilderConfig(BaseYaml, BaseHashable):
     @computed_field
     @functools.cached_property
     def path_status(self) -> str:
-        return path.join(self.path_docs, ".builder.status.yaml")
+        return path.join(self.data.path_docs, ".builder.status.yaml")
 
     @computed_field
     @functools.cached_property
@@ -263,5 +427,4 @@ class BuilderConfig(BaseYaml, BaseHashable):
             return Status.load(self.path_status)
         return None
 
-    path_docs: Annotated[str, Field(default=PATH_DOCS_DEFUALT)]
     data: Annotated[TextDataConfig, Field()]

@@ -31,7 +31,7 @@ async def _cmd_up(_context: typer.Context):
 
     async with httpx.AsyncClient() as client:
         requests = Requests(context_data, client)
-        status = await resume_handler.upsert(requests)
+        status = await resume_handler.ensure(requests)
 
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
@@ -42,6 +42,29 @@ async def _cmd_up(_context: typer.Context):
 
 def cmd_up(_context: typer.Context):
     asyncio.run(_cmd_up(_context))
+
+
+async def _cmd_patch(_context: typer.Context):
+    # data = [item.model_dump(mode="json") for item in context.config.items]
+    # context.console_handler.handle(handler_data=handler_data)  # type: ignore
+
+    context_data: ContextData = _context.obj
+    resume_handler = TextController(context_data)
+
+    async with httpx.AsyncClient() as client:
+        requests = Requests(context_data, client)
+        status = await resume_handler.ensure(requests)
+        await resume_handler.update(requests)
+
+    handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
+    context_data.console_handler.handle(handler_data=handler_data)
+
+    status = mwargs(Status, status=status)
+    status.update_status_file(context_data.builder.path_status)
+
+
+def cmd_patch(_context: typer.Context):
+    asyncio.run(_cmd_patch(_context))
 
 
 async def _cmd_down(_context: typer.Context):
@@ -112,6 +135,7 @@ def create_command() -> typer.Typer:
     cli.callback()(ContextData.typer_callback)
     cli.command("status")(cmd_status)
     cli.command("up")(cmd_up)
+    cli.command("patch")(cmd_up)
     cli.command("down")(cmd_down)
     cli.command("config")(cmd_config)
     cli.command("run")(cmd_run)
