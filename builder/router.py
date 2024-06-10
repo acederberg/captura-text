@@ -20,8 +20,10 @@ from starlette.responses import HTMLResponse
 
 from builder.controller import ContextData
 from builder.schemas import PATH_CONFIGS_BUILDER_DEFAULT, BuilderConfig, Config, Status
+from builder.snippets import Format
 
 
+# --------------------------------------------------------------------------- #
 def config() -> Config:
     return mwargs(Config)
 
@@ -34,6 +36,16 @@ def builder() -> BuilderConfig:
 
 
 DependsBuilder = Annotated[BuilderConfig, Depends(builder, use_cache=True)]
+
+
+def status(builder: DependsBuilder) -> Status:
+    if builder.status is None:
+        raise HTTPException(500, detail="``status`` is required.")
+
+    return builder.status
+
+
+DependsStatus = Annotated[Status, Depends(status, use_cache=True)]
 
 
 def context(config: DependsConfig, builder: DependsBuilder) -> ContextData:
@@ -49,6 +61,9 @@ def context(config: DependsConfig, builder: DependsBuilder) -> ContextData:
 DependsContext = Annotated[ContextData, Depends(context, use_cache=True)]
 
 
+# --------------------------------------------------------------------------- #
+
+
 # NOTE: Restructured Text Should be passed in as Jinja Templates.
 # NOTE: ALL rendering should be done using the command line for now until I
 #       have time to add posting, etc.
@@ -56,6 +71,7 @@ class TextView(BaseView):
 
     view_routes = dict(
         get_by_name_json="/{name}/json",
+        get_by_name_raw="/{name}/raw",
         get_by_name_html="/{name}",
     )
 
@@ -66,15 +82,18 @@ class TextView(BaseView):
     async def get_by_name_json(
         cls,
         context: DependsContext,
+        status: DependsStatus,
+        *,
         name: str,
+        format: Format,
     ) -> AsOutput[DocumentSchema]:
         """Get JSON data for the document."""
 
-        status = context.builder.status.status
-        data = status.get(name)
-
-        if data is None:
+        if (data := status.status.get(name)) is None:
             raise HTTPException(404, detail="No such document.")
+
+        if format != Format.rst:
+            data = data.renders[0]  # NOTE: Because for now there is exactly 1.
 
         async with httpx.AsyncClient() as client:
             requests = Requests(context, client)
@@ -95,18 +114,42 @@ class TextView(BaseView):
         )
 
     @classmethod
+    async def get_by_name_raw(
+        cls,
+        context: DependsContext,
+        status: DependsStatus,
+        *,
+        name: str,
+        format: Format,
+    ) -> str:
+        """Get document text."""
+
+        data = await cls.get_by_name_json(
+            context,
+            status,
+            name=name,
+            format=format,
+        )
+        content = data.data.content["text"]["content"]
+        return content
+
+    @classmethod
     async def get_by_name_html(
         cls,
         context: DependsContext,
+        status: DependsStatus,
+        *,
         name: str,
     ):
         """Get RST document."""
 
         # NOTE: These documents should be built before, not `on the fly`. All
         #       document building should happen outside of app run.
-        status = context.builder.status.status
-        data = await cls.get_by_name_json(context, name)
-        content = data.data.content["text"]["content"]
+        content = await cls.get_by_name_raw(
+            context,
+            status,
+            name=name,
+            format=Format.html,
+        )
 
-        parser = publish_string(content, writer_name="html")
-        return HTMLResponse(str(parser.document))
+        return HTMLResponse(content)

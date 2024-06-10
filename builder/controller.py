@@ -1,4 +1,5 @@
 import asyncio
+import itertools
 from os import path
 from typing import Dict, List, Tuple
 
@@ -23,9 +24,11 @@ from builder.schemas import (
     PATH_CONFIGS_BUILDER_DEFAULT,
     BuilderConfig,
     Config,
+    Status,
     TextDataConfig,
     TextDataStatus,
     TextItemConfig,
+    TextItemStatus,
 )
 
 logger = util.get_logger(__name__)
@@ -56,12 +59,26 @@ class TextController:
     data: TextDataConfig
     fmt_name: str
 
+    @property
+    def status(self) -> TextDataStatus:
+        status_wrapper = self.builder.status
+        if status_wrapper is None:
+            raise ValueError()
+        return status_wrapper.status
+
     def __init__(self, context_data: ContextData):
         self.context_data = context_data
         self.config = context_data.config
         self.builder = context_data.builder
         self.data = self.builder.data
         self.fmt_name = f"{{}}-{self.data.identifier}"
+
+    def check_one(self, requests: Requests, res, **kwargs):
+        (data_assignments,), err = requests.handler.check_status(res, **kwargs)
+        if err is not None:
+            raise err
+
+        return data_assignments.data
 
     async def upsert_collection(
         self,
@@ -169,12 +186,15 @@ class TextController:
                 status = 200
                 tasks = (
                     requests.d.update(
-                        handler_data_search.data.data[0].uuid,
+                        uuid,
                         name=fmt_name_full.format(fmt.name),
                         description=item.description,
-                        content=content,
+                        content=content,  # type: ignore
                     )
-                    for fmt, content in item.create_content(filename).items()
+                    for (fmt, content), uuid in zip(
+                        item.create_content(filename).items(),
+                        (item.uuid for item in handler_data_search.data.data),
+                    )
                 )
             case _:
                 CONSOLE.print("[red]Too many results.")
@@ -226,3 +246,28 @@ class TextController:
             documents=documents_items,
             assignments=data_assignments.data.data,
         )
+
+    # NOTE: Only return status when status has been changed.
+    async def destroy(self, requests: Requests) -> TextDataStatus:
+
+        status = self.status.model_copy()
+        document_uuids = tuple(
+            itertools.chain(
+                *(
+                    tuple(item.uuid for item in (*item_rst.renders, item_rst))
+                    for item_rst in status.documents.values()
+                )
+            )
+        )
+        document_reqs = map(requests.d.delete, document_uuids)
+        collection_req = requests.c.delete(status.collection.uuid)
+
+        results = await asyncio.gather(collection_req, *document_reqs)
+        tuple(
+            map(
+                lambda res: self.check_one(requests, res),
+                results,
+            )
+        )
+
+        return status

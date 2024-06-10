@@ -55,10 +55,10 @@ class TextItemConfig(BaseHashable):
         logger.debug("Building content for `%s`.", filepath)
         tags = ["resume"]
         with open(filepath, "r") as file:
-            content_rst = "\n".join(file.readlines())
+            content_rst = "".join(file.readlines())
             content = dict(rst=content_rst)
 
-        content_html = str(publish_parts(content_rst, writer_name="html"))
+        content_html = str(publish_parts(content_rst, writer_name="html")["html_body"])
         content.update(html=content_html)
 
         texts = {
@@ -128,6 +128,7 @@ class RenderedDocumentStatus(BaseHashable):
 class TextItemStatus(TextItemConfig, RenderedDocumentStatus):
     # ``captura`` is included since display names are not included.
 
+    destroyed: Annotated[bool, Field(default=False)]
     renders: "List[RenderedDocumentStatus]"
 
 
@@ -156,7 +157,6 @@ class TextDataStatus(BaseHashable):
 
         identifier = data.identifier
 
-        print(documents)
         yucky = zip(documents, assignments, data.documents.items())
         return cls(
             identifier=identifier,

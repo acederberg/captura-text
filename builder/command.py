@@ -1,4 +1,5 @@
 import asyncio
+import os
 from os import path
 from typing import Annotated
 
@@ -30,17 +31,36 @@ async def _cmd_up(_context: typer.Context):
 
     async with httpx.AsyncClient() as client:
         requests = Requests(context_data, client)
-        data = await resume_handler.upsert(requests)
+        status = await resume_handler.upsert(requests)
 
-    handler_data = BaseHandlerData(data=data.model_dump(mode="json"))
+    handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
 
-    status = mwargs(Status, status=data)
+    status = mwargs(Status, status=status)
     status.update_status_file(context_data.builder.path_status)
 
 
 def cmd_up(_context: typer.Context):
     asyncio.run(_cmd_up(_context))
+
+
+async def _cmd_down(_context: typer.Context):
+
+    context_data: ContextData = _context.obj
+    resume_handler = TextController(context_data)
+
+    async with httpx.AsyncClient() as client:
+        requests = Requests(context_data, client)
+        status = await resume_handler.destroy(requests)
+
+    handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
+    context_data.console_handler.handle(handler_data=handler_data)
+
+    os.remove(context_data.builder.path_status)
+
+
+def cmd_down(_context: typer.Context):
+    asyncio.run(_cmd_down(_context))
 
 
 def cmd_config(
@@ -82,37 +102,6 @@ def cmd_run(_context: typer.Context):
     uvicorn.run("builder.__main__:app", port=8000, host="0.0.0.0", reload=True)
 
 
-async def _cmd_render(_context: typer.Context, name: str):
-    context_data: ContextData = _context.obj
-
-    if (item_status := context_data.builder.status.status.get(name)) is None:
-        CONSOLE.print(f"[red]No such document with name `{name}`.")
-        CONSOLE.print(f"[red]RUn `python -m builder up`.")
-        raise typer.Exit(1)
-
-    async with httpx.AsyncClient() as client:
-        requests = Requests(context_data, client)
-        res = await requests.d.read(item_status.uuid)
-
-    if res.status_code != 200:
-        context_data.console_handler(res)
-
-    data = AsOutput[DocumentSchema].model_validate_json(res.content)
-
-    with open(f"{name}.html", "w") as file:
-        content = data.data.content["text"]["content"]
-        published = publish_parts(
-            content,
-            writer_name="html",
-        )
-
-        file.writelines(published["html_body"])
-
-
-def cmd_render(_context: typer.Context, name: str):
-    asyncio.run(_cmd_render(_context, name))
-
-
 LOGGING_CONFIG, _ = util.setup_logging()
 uvicorn.config.LOGGING_CONFIG.update(LOGGING_CONFIG)
 
@@ -123,7 +112,7 @@ def create_command() -> typer.Typer:
     cli.callback()(ContextData.typer_callback)
     cli.command("status")(cmd_status)
     cli.command("up")(cmd_up)
+    cli.command("down")(cmd_down)
     cli.command("config")(cmd_config)
     cli.command("run")(cmd_run)
-    cli.command("render")(cmd_render)
     return cli()
