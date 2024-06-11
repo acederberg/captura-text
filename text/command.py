@@ -16,7 +16,7 @@ from client.requests import Requests
 from docutils.core import publish_parts
 
 from builder.controller import ContextData, TextController
-from builder.schemas import Status
+from builder.schemas import TextBuilderStatus
 
 # --------------------------------------------------------------------------- #
 logger = util.get_logger(__name__)
@@ -36,7 +36,7 @@ async def _cmd_up(_context: typer.Context):
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
 
-    status = mwargs(Status, status=status)
+    status = mwargs(TextBuilderStatus, status=status)
     status.update_status_file(context_data.builder.path_status)
 
 
@@ -59,7 +59,7 @@ async def _cmd_patch(_context: typer.Context):
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
 
-    status = mwargs(Status, status=status)
+    status = mwargs(TextBuilderStatus, status=status)
     status.update_status_file(context_data.builder.path_status)
 
 
@@ -135,7 +135,7 @@ def create_command() -> typer.Typer:
     cli.callback()(ContextData.typer_callback)
     cli.command("status")(cmd_status)
     cli.command("up")(cmd_up)
-    cli.command("patch")(cmd_up)
+    cli.command("patch")(cmd_patch)
     cli.command("down")(cmd_down)
     cli.command("config")(cmd_config)
     cli.command("run")(cmd_run)

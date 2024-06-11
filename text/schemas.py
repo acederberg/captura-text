@@ -17,7 +17,7 @@ from app.schemas import (
 )
 from client import Config as ClientConfig
 from client.config import YamlSettingsConfigDict
-from client.handlers import RequestHandlerData, TypeAdapter
+from client.handlers import RequestHandlerData, TypeAdapter, typer
 from client.requests import Requests
 from docutils.core import publish_parts
 from pydantic import Field
@@ -43,7 +43,7 @@ class BaseObjectConfig(BaseHashable):
     kind: ClassVar[KindObject]
 
 
-class TextItemConfig(BaseObjectConfig):
+class TextDocumentConfig(BaseObjectConfig):
     kind = KindObject.document
 
     content_file: Annotated[
@@ -98,7 +98,7 @@ class TextCollectionConfig(BaseObjectConfig):
 class TextDataConfig(BaseHashable):
     collection: TextCollectionConfig
     documents: Annotated[
-        Dict[str, TextItemConfig],
+        Dict[str, TextDocumentConfig],
         Field(description="Text documents to add to the api as documents."),
     ]
     path_docs: str
@@ -117,10 +117,10 @@ class TextDataConfig(BaseHashable):
         ),
     ]
 
-    def get(self, name: str) -> TextItemConfig | None:
+    def get(self, name: str) -> TextDocumentConfig | None:
         return self.documents.get(name)
 
-    def require(self, name: str) -> TextItemConfig:
+    def require(self, name: str) -> TextDocumentConfig:
         v = self.get(name)
         if v is None:
             raise ValueError(f"No such text item ``{name}``.")
@@ -154,7 +154,6 @@ class TextDataConfig(BaseHashable):
     async def discover_collection(
         self,
         requests: Requests,
-        name: str,
     ) -> CollectionSchema | None:
         name_captura = f"{self.collection.name}-{self.identifier}"
         adptr = TypeAdapter(AsOutput[List[DocumentSchema]])
@@ -246,23 +245,23 @@ class BaseObjectStatus(BaseObjectConfig):
     deleted: Annotated[bool, Field(default=True)]
 
 
-class TextItemStatus(BaseObjectStatus, TextItemConfig):
+class TextDocumentStatus(BaseObjectStatus, TextDocumentConfig):
     name: str
 
 
-class TextItemCollectionStatus(BaseObjectStatus, TextCollectionConfig): ...
+class TextCollectionStatus(BaseObjectStatus, TextCollectionConfig): ...
 
 
 class TextDataStatus(BaseHashable):
-    documents: Dict[str, TextItemStatus]
-    collection: TextItemCollectionStatus
+    documents: Dict[str, TextDocumentStatus]
+    collection: TextCollectionStatus
     path_docs: str
     identifier: str
 
-    def get(self, name: str) -> TextItemStatus | None:
+    def get(self, name: str) -> TextDocumentStatus | None:
         return self.documents.get(name)
 
-    def require(self, name: str) -> TextItemStatus:
+    def require(self, name: str) -> TextDocumentStatus:
         v = self.get(name)
         if v is None:
             raise ValueError(f"No such text item ``{name}``.")
@@ -311,8 +310,8 @@ class TextDataStatus(BaseHashable):
         This returns the raw data from captura. Tranformation into ``status``
         is done within ``controller`` as is bulk upsertion.
         """
-
         name_captura = f"{self.collection.name}-{self.identifier}"
+
         status = 200
 
         res = await requests.c.update(
@@ -332,7 +331,7 @@ class TextDataStatus(BaseHashable):
         self,
         requests: Requests,
         name: str,
-    ) -> TextItemStatus:
+    ) -> TextDocumentStatus:
         item = self.require(name)
         res = await requests.d.delete(item.uuid)
         (_,), err = requests.handler.check_status(res)
@@ -343,7 +342,7 @@ class TextDataStatus(BaseHashable):
         out.deleted = True
         return out
 
-    async def destroy_collection(self, requests: Requests) -> TextItemCollectionStatus:
+    async def destroy_collection(self, requests: Requests) -> TextCollectionStatus:
         res = await requests.c.delete(self.collection.uuid)
         (_,), err = requests.handler.check_status(res)
         if err is not None:
@@ -364,7 +363,7 @@ class BaseYaml:
         return cls(**results)
 
 
-class Status(BaseYaml, BaseHashable):
+class TextBuilderStatus(BaseYaml, BaseHashable):
     """Text status in captura.
 
     This is created by ``builder up`` and then used by ``router.py`` to decide
@@ -422,9 +421,9 @@ class BuilderConfig(BaseYaml, BaseHashable):
 
     @computed_field
     @functools.cached_property
-    def status(self) -> Status | None:
+    def status(self) -> TextBuilderStatus | None:
         if path.exists(self.path_status):
-            return Status.load(self.path_status)
+            return TextBuilderStatus.load(self.path_status)
         return None
 
     data: Annotated[TextDataConfig, Field()]

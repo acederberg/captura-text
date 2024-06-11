@@ -21,7 +21,7 @@ from pydantic import TypeAdapter
 from starlette.responses import HTMLResponse
 
 from builder.controller import ContextData
-from builder.schemas import PATH_CONFIGS_BUILDER_DEFAULT, BuilderConfig, Config, Status
+from builder.schemas import PATH_CONFIGS_BUILDER_DEFAULT, BuilderConfig, Config, TextBuilderStatus
 from builder.snippets import Format
 
 
@@ -40,14 +40,14 @@ def builder() -> BuilderConfig:
 DependsBuilder = Annotated[BuilderConfig, Depends(builder, use_cache=True)]
 
 
-def status(builder: DependsBuilder) -> Status:
+def status(builder: DependsBuilder) -> TextBuilderStatus:
     if builder.status is None:
         raise HTTPException(500, detail="``status`` is required.")
 
     return builder.status
 
 
-DependsStatus = Annotated[Status, Depends(status, use_cache=True)]
+DependsTextBuilderStatus = Annotated[TextBuilderStatus, Depends(status, use_cache=True)]
 
 
 def context(config: DependsConfig, builder: DependsBuilder) -> ContextData:
@@ -83,7 +83,7 @@ class TextView(BaseView):
     async def get_by_name_json(
         cls,
         context: DependsContext,
-        status: DependsStatus,
+        status: DependsTextBuilderStatus,
         *,
         name: str,
     ) -> AsOutput[DocumentSchema]:
@@ -114,7 +114,7 @@ class TextView(BaseView):
     async def get_by_name(
         cls,
         context: DependsContext,
-        status: DependsStatus,
+        status: DependsTextBuilderStatus,
         *,
         name: str,
     ):

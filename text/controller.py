@@ -25,12 +25,12 @@ from builder.schemas import (
     BaseObjectStatus,
     BuilderConfig,
     Config,
-    Status,
+    TextBuilderStatus,
     TextDataConfig,
     TextDataStatus,
-    TextItemCollectionStatus,
-    TextItemConfig,
-    TextItemStatus,
+    TextCollectionStatus,
+    TextDocumentConfig,
+    TextDocumentStatus,
 )
 
 logger = util.get_logger(__name__)
@@ -79,17 +79,17 @@ class TextController:
     async def ensure_collection(
         self,
         requests: Requests,
-    ) -> TextItemCollectionStatus:
+    ) -> TextCollectionStatus:
         """Update the collection in captura."""
         collection_config = self.builder.data.collection
         name = collection_config.name
 
-        collection = await self.builder.data.discover_collection(requests, name)
+        collection = await self.builder.data.discover_collection(requests)
         if collection is None:
             collection = await self.builder.data.create_collection(requests, name)
 
-        return TextItemCollectionStatus(
-            name=collection.name,
+        return TextCollectionStatus(
+            name=collection_config.name,
             description=collection.description,
             name_captura=collection.name,
             uuid=collection.uuid,
@@ -100,7 +100,7 @@ class TextController:
         self,
         requests: Requests,
         name: str,
-    ) -> TextItemStatus:
+    ) -> TextDocumentStatus:
         """Upsert document items. Each document should be stored in raw form
         and as html.
         """
@@ -110,7 +110,7 @@ class TextController:
         if document is None:
             document = await self.builder.data.create_document(requests, name)
 
-        return TextItemStatus(
+        return TextDocumentStatus(
             uuid=document.uuid,
             name=name,
             name_captura=document.name,
@@ -127,7 +127,7 @@ class TextController:
             self.ensure_document(requests, name) for name in self.data.documents
         )
 
-        documents: Dict[str, TextItemStatus]
+        documents: Dict[str, TextDocumentStatus]
         documents = {v.name: v for v in await asyncio.gather(*documents_tasks)}
         collection = await self.ensure_collection(requests)
 
