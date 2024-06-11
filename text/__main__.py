@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 
-from builder.command import create_command
-from builder.router import TextView
+from text.command import create_command
+from text.router import TextView
 
 app = FastAPI()
 app.include_router(TextView.view_router)

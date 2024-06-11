@@ -22,16 +22,16 @@ from client.requests import Requests
 from docutils.core import publish_parts
 from pydantic import Field
 
-from builder import snippets
+from text import snippets
 
 logger = util.get_logger(__name__)
 
 PATH_HERE = path.realpath(path.join(path.dirname(__file__), ".."))
-PATH_DOCS_DEFUALT = path.join(PATH_HERE, "docs")
+PATH_DOCS_DEFAULT = path.join(PATH_HERE, "docs")
 PATH_CONFIGS_DEFAULT = path.join(PATH_HERE, "configs")
-PATH_STATUS_DEFUALT = path.join(PATH_DOCS_DEFUALT, ".builder.status.yaml")
+PATH_STATUS_DEFAULT = path.join(PATH_DOCS_DEFAULT, ".text.status.yaml")
 PATH_CONFIGS_DEFAULT = path.join(PATH_HERE, "configs")
-PATH_CONFIGS_BUILDER_DEFAULT = path.join(PATH_CONFIGS_DEFAULT, "builder.yaml")
+PATH_CONFIGS_BUILDER_DEFAULT = path.join(PATH_DOCS_DEFAULT, "text.yaml")
 PATH_CONFIGS_CLIENT_DEFAULT = path.join(PATH_CONFIGS_DEFAULT, "client.yaml")
 
 
@@ -56,8 +56,8 @@ class TextDocumentConfig(BaseObjectConfig):
         ),
     ]
     description: fields.FieldDescription
-    format_in: Literal[snippets.Format.rst]
-    format_out: Literal[snippets.Format.rst, snippets.Format.html]
+    format_in: Literal[snippets.Format.rst, snippets.Format.css]
+    format_out: Literal[snippets.Format.rst, snippets.Format.css, snippets.Format.html]
 
     def create_content(self, filepath: str) -> Dict[str, Any]:
         logger.debug("Building content for `%s`.", filepath)
@@ -65,8 +65,19 @@ class TextDocumentConfig(BaseObjectConfig):
         with open(filepath, "r") as file:
             content = "".join(file.readlines())
 
-        if self.format_out == snippets.Format.html:
-            content = str(publish_parts(content, writer_name="html")["html_body"])
+        match (self.format_in, self.format_out):
+            case (snippets.Format.rst, snippets.Format.html):
+                content = str(publish_parts(content, writer_name="html")["html_body"])
+            case (snippets.Format.css, snippets.Format.css) | (
+                snippets.Format.rst,
+                snippets.Format.rst,
+            ):
+                ...
+            case _:
+                msg = (
+                    f"Unsupported conversion ``{self.format_in} -> {self.format_out}``."
+                )
+                raise ValueError(msg)
 
         return dict(
             text=mwargs(
@@ -366,7 +377,7 @@ class BaseYaml:
 class TextBuilderStatus(BaseYaml, BaseHashable):
     """Text status in captura.
 
-    This is created by ``builder up`` and then used by ``router.py`` to decide
+    This is created by ``text up`` and then used by ``router.py`` to decide
     which documents to render.
     """
 
@@ -417,7 +428,7 @@ class BuilderConfig(BaseYaml, BaseHashable):
     @computed_field
     @functools.cached_property
     def path_status(self) -> str:
-        return path.join(self.data.path_docs, ".builder.status.yaml")
+        return path.join(self.data.path_docs, ".text.status.yaml")
 
     @computed_field
     @functools.cached_property

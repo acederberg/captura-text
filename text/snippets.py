@@ -17,6 +17,7 @@ logger = util.get_logger(__name__)
 
 
 class Format(str, enum.Enum):
+    css = "css"
     html = "html"
     md = "md"
     rst = "rst"

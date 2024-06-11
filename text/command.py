@@ -15,8 +15,8 @@ from client.handlers import CONSOLE, BaseHandlerData
 from client.requests import Requests
 from docutils.core import publish_parts
 
-from builder.controller import ContextData, TextController
-from builder.schemas import TextBuilderStatus
+from text.controller import ContextData, TextController
+from text.schemas import TextBuilderStatus
 
 # --------------------------------------------------------------------------- #
 logger = util.get_logger(__name__)
@@ -37,7 +37,7 @@ async def _cmd_up(_context: typer.Context):
     context_data.console_handler.handle(handler_data=handler_data)
 
     status = mwargs(TextBuilderStatus, status=status)
-    status.update_status_file(context_data.builder.path_status)
+    status.update_status_file(context_data.text.path_status)
 
 
 def cmd_up(_context: typer.Context):
@@ -60,7 +60,7 @@ async def _cmd_patch(_context: typer.Context):
     context_data.console_handler.handle(handler_data=handler_data)
 
     status = mwargs(TextBuilderStatus, status=status)
-    status.update_status_file(context_data.builder.path_status)
+    status.update_status_file(context_data.text.path_status)
 
 
 def cmd_patch(_context: typer.Context):
@@ -79,7 +79,7 @@ async def _cmd_down(_context: typer.Context):
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
 
-    os.remove(context_data.builder.path_status)
+    os.remove(context_data.text.path_status)
 
 
 def cmd_down(_context: typer.Context):
@@ -88,15 +88,15 @@ def cmd_down(_context: typer.Context):
 
 def cmd_config(
     _context: typer.Context,
-    builder: Annotated[bool, typer.Option("--builder/--client")] = True,
+    text: Annotated[bool, typer.Option("--text/--client")] = True,
 ):
     context_data: ContextData = _context.obj
 
-    if not builder:
+    if not text:
         include = {"host", "profile", "output"}
         config_data = context_data.config.model_dump(mode="json", include=include)
     else:
-        config_data = context_data.builder.model_dump(mode="json")
+        config_data = context_data.text.model_dump(mode="json")
 
     handler_data = BaseHandlerData(data=config_data)
     context_data.console_handler.handle(handler_data=handler_data)
@@ -104,13 +104,13 @@ def cmd_config(
 
 def cmd_status(_context: typer.Context):
     context_data: ContextData = _context.obj
-    builder = context_data.builder
+    text = context_data.text
 
-    if not path.exists(context_data.builder.path_status):
+    if not path.exists(context_data.text.path_status):
         CONSOLE.print("[green]No status yet.")
         raise typer.Exit(1)
 
-    status = builder.status
+    status = text.status
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
 
@@ -118,11 +118,11 @@ def cmd_status(_context: typer.Context):
 def cmd_run(_context: typer.Context):
     context_data: ContextData = _context.obj
 
-    if not path.exists(context_data.builder.path_status):
+    if not path.exists(context_data.text.path_status):
         CONSOLE.print("[green]No status yet.")
         raise typer.Exit(1)
 
-    uvicorn.run("builder.__main__:app", port=8000, host="0.0.0.0", reload=True)
+    uvicorn.run("text.__main__:app", port=8000, host="0.0.0.0", reload=True)
 
 
 LOGGING_CONFIG, _ = util.setup_logging()

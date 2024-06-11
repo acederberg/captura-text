@@ -19,8 +19,8 @@ from client.requests import ContextData as ClientContextData
 from client.requests import Requests
 from pydantic import TypeAdapter
 
-from builder import snippets
-from builder.schemas import (
+from text import snippets
+from text.schemas import (
     PATH_CONFIGS_BUILDER_DEFAULT,
     BaseObjectStatus,
     BuilderConfig,
@@ -38,17 +38,17 @@ logger = util.get_logger(__name__)
 
 class ContextData(ClientContextData):
     config: Config  # type: ignore
-    builder: BuilderConfig
+    text: BuilderConfig
 
     @classmethod
     def typer_callback(
-        cls, context: typer.Context, builder_config: str = PATH_CONFIGS_BUILDER_DEFAULT
+        cls, context: typer.Context, text_config: str = PATH_CONFIGS_BUILDER_DEFAULT
     ) -> None:
 
         config = mwargs(Config)
         context.obj = ContextData(
             config=config,
-            builder=BuilderConfig.load(builder_config),
+            text=BuilderConfig.load(text_config),
             console_handler=ConsoleHandler(config),
         )
 
@@ -57,13 +57,13 @@ class TextController:
 
     context_data: ContextData
     config: Config
-    builder: BuilderConfig
+    text: BuilderConfig
     data: TextDataConfig
     fmt_name: str
 
     @property
     def status(self) -> TextDataStatus:
-        status_wrapper = self.builder.status
+        status_wrapper = self.text.status
         if status_wrapper is None:
             raise ValueError()
         return status_wrapper.status
@@ -71,8 +71,8 @@ class TextController:
     def __init__(self, context_data: ContextData):
         self.context_data = context_data
         self.config = context_data.config
-        self.builder = context_data.builder
-        self.data = self.builder.data
+        self.text = context_data.text
+        self.data = self.text.data
         self.fmt_name = f"{{}}-{self.data.identifier}"
 
     # NOTE: Moving discovery out of here gaurentees that status exists.
@@ -81,12 +81,12 @@ class TextController:
         requests: Requests,
     ) -> TextCollectionStatus:
         """Update the collection in captura."""
-        collection_config = self.builder.data.collection
+        collection_config = self.text.data.collection
         name = collection_config.name
 
-        collection = await self.builder.data.discover_collection(requests)
+        collection = await self.text.data.discover_collection(requests)
         if collection is None:
-            collection = await self.builder.data.create_collection(requests, name)
+            collection = await self.text.data.create_collection(requests, name)
 
         return TextCollectionStatus(
             name=collection_config.name,
@@ -105,10 +105,10 @@ class TextController:
         and as html.
         """
 
-        item = self.builder.data.require(name)
-        document = await self.builder.data.discover_document(requests, name)
+        item = self.text.data.require(name)
+        document = await self.text.data.discover_document(requests, name)
         if document is None:
-            document = await self.builder.data.create_document(requests, name)
+            document = await self.text.data.create_document(requests, name)
 
         return TextDocumentStatus(
             uuid=document.uuid,
@@ -142,7 +142,7 @@ class TextController:
         if err is not None:
             raise err
 
-        data = self.builder.data
+        data = self.text.data
         return TextDataStatus(
             identifier=data.identifier,
             documents=documents,
