@@ -20,27 +20,17 @@ handlers:
     level: DEBUG
   stdout_min:
     class: logging.StreamHandler
-    # formatter: human 
-    # ^^^^^^^^^^^^^^^^
-    # NOTE: Breaks logging
     stream: ext://sys.stdout
   stderr:
     class: logging.StreamHandler
-    # level: WARNING
-    # formatter: human
     stream: ext://sys.stderr
-  # file_json:
-  #   class: logging.handlers.RotatingFileHandler
-  #   level: DEBUG
-  #   formatter: json
-  #   filename: logs/captura.jsonl
-  #   maxBytes: 10000000
-  #   backupCount: 5
-# disable_existing_loggers: True
 loggers:
   root:
     level: DEBUG
     handlers:
       - stdout_dev
-      # - file_json
+  uvicorn.error:
+    level: INFO
+  uvicorn:
+    level: INFO
 

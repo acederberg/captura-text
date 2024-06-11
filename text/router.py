@@ -6,6 +6,7 @@ add your documents to a captura instance. Once this command has been run, find
 your ``.text.status.yaml`` and use its contents to deploy this app.
 """
 
+from os import path
 from traceback import print_tb
 from typing import Annotated
 
@@ -17,10 +18,11 @@ from client.requests import httpx
 from docutils.core import publish_string
 from fastapi import Depends, HTTPException, Request, Response
 from fastapi.responses import FileResponse, PlainTextResponse
+from jinja2 import Template
 from pydantic import TypeAdapter
 from starlette.responses import HTMLResponse
 
-from text.controller import ContextData
+from text.controller import ContextData, TextOptions
 from text.schemas import (
     PATH_CONFIGS_BUILDER_DEFAULT,
     BuilderConfig,
@@ -33,15 +35,12 @@ from text.snippets import Format
 TEMPLATE = """
 <html>
   <head>
-    <link rel="stylesheet" type="text/css" href="/static/base.css">
+    <link rel="stylesheet" type="text/css" href="/index.css">
     <link rel="shortcut icon" href="https://fastapi.tiangolo.com/img/favicon.png">
-    <title>{title}</title>
+    <title>{document.description}</title>
   </head>
   <body>
-    <div class="navbar">
-      <a href="/home">Home</a>
-    </div>
-    {content}
+    {body}
   </body>
 </html>
 """
@@ -75,7 +74,12 @@ DependsTextBuilderStatus = Annotated[TextBuilderStatus, Depends(status, use_cach
 def context(config: DependsConfig, text: DependsBuilder) -> ContextData:
     try:
         console_handler = ConsoleHandler(config=config)
-        return ContextData(config=config, text=text, console_handler=console_handler)  # type: ignore
+        return ContextData(
+            config=config,
+            text=text,
+            console_handler=console_handler,
+            options=TextOptions(names=None),
+        )  # type: ignore
     except Exception as err:
         print_tb(err.__traceback__)
         print(err)
@@ -85,9 +89,18 @@ def context(config: DependsConfig, text: DependsBuilder) -> ContextData:
 DependsContext = Annotated[ContextData, Depends(context, use_cache=True)]
 
 
-# --------------------------------------------------------------------------- #
+def template(text: DependsBuilder) -> str:
+    if (template_file := text.data.template_file) is None:
+        return TEMPLATE
 
-PATH_TEMPLATES = here("templates")
+    with open(path.join(text.data.path_docs, template_file), "r") as file:
+        return "".join(file.readlines())
+
+
+DependsTemplate = Annotated[str, Depends(template, use_cache=True)]
+
+
+# --------------------------------------------------------------------------- #
 
 
 # NOTE: Restructured Text Should be passed in as Jinja Templates.
@@ -99,7 +112,6 @@ class TextView(BaseView):
         get_by_name_json="/{name}/json",
         get_by_name="/{name}",
     )
-    view_templates = Jinja2Templates(directory=PATH_TEMPLATES)
 
     # NOTE: Will require own token to function for the moment. Should match
     #       against the name provided in ``config``, not the actual name with
@@ -140,6 +152,7 @@ class TextView(BaseView):
         cls,
         context: DependsContext,
         status: DependsTextBuilderStatus,
+        template: DependsTemplate,
         *,
         name: str,
     ):
@@ -152,13 +165,14 @@ class TextView(BaseView):
             status,
             name=name,
         )
-        text = data.data.content["text"]
 
-        content = text["content"]
+        text = data.data.content["text"]
         if (format := text["format"]) == "html":
-            wrapped = TEMPLATE.format(content=content, title=data.data.description)
+
+            wrapped = template.format(document=data.data, body=text["content"])
             return HTMLResponse(wrapped)
         else:
+            content = text["content"]
             return PlainTextResponse(
                 content, headers={"Content-Type": f"text/{format}"}
             )

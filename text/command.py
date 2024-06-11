@@ -1,7 +1,7 @@
 import asyncio
 import os
 from os import path
-from typing import Annotated
+from typing import Annotated, List
 
 import httpx
 import typer
@@ -15,7 +15,7 @@ from client.handlers import CONSOLE, BaseHandlerData
 from client.requests import Requests
 from docutils.core import publish_parts
 
-from text.controller import ContextData, TextController
+from text.controller import ContextData, TextController, TextOptions
 from text.schemas import TextBuilderStatus
 
 # --------------------------------------------------------------------------- #
@@ -31,7 +31,7 @@ async def _cmd_up(_context: typer.Context):
 
     async with httpx.AsyncClient() as client:
         requests = Requests(context_data, client)
-        status = await resume_handler.ensure(requests)
+        status = await resume_handler.ensure(requests, context_data.options)
 
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
@@ -53,8 +53,8 @@ async def _cmd_patch(_context: typer.Context):
 
     async with httpx.AsyncClient() as client:
         requests = Requests(context_data, client)
-        status = await resume_handler.ensure(requests)
-        await resume_handler.update(requests)
+        status = await resume_handler.ensure(requests, TextOptions(names=None))
+        await resume_handler.update(requests, context_data.options)
 
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
@@ -74,7 +74,7 @@ async def _cmd_down(_context: typer.Context):
 
     async with httpx.AsyncClient() as client:
         requests = Requests(context_data, client)
-        status = await resume_handler.destroy(requests)
+        status = await resume_handler.destroy(requests, context_data.options)
 
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
@@ -106,11 +106,10 @@ def cmd_status(_context: typer.Context):
     context_data: ContextData = _context.obj
     text = context_data.text
 
-    if not path.exists(context_data.text.path_status):
+    if (status := text.status) is None:
         CONSOLE.print("[green]No status yet.")
         raise typer.Exit(1)
 
-    status = text.status
     handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
     context_data.console_handler.handle(handler_data=handler_data)
 

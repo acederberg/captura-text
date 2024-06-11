@@ -2,19 +2,12 @@ from os import path
 from typing import Annotated, Any, ClassVar, Dict, List, Literal, Self, Set
 
 import yaml
-
 # --------------------------------------------------------------------------- #
 from app import ChildrenUser, KindObject, fields, util
 from app.auth import functools
 from app.config import BaseHashable
-from app.schemas import (
-    AsOutput,
-    AssignmentSchema,
-    CollectionSchema,
-    DocumentSchema,
-    computed_field,
-    mwargs,
-)
+from app.schemas import (AsOutput, AssignmentSchema, CollectionSchema,
+                         DocumentSchema, computed_field, mwargs)
 from client import Config as ClientConfig
 from client.config import YamlSettingsConfigDict
 from client.handlers import RequestHandlerData, TypeAdapter, typer
@@ -113,6 +106,10 @@ class TextDataConfig(BaseHashable):
         Field(description="Text documents to add to the api as documents."),
     ]
     path_docs: str
+    template_file: Annotated[
+        str | None, 
+        Field(description="Template to render ``html`` into.", default=None),
+    ]
 
     identifier: Annotated[
         str,
