@@ -2,12 +2,19 @@ from os import path
 from typing import Annotated, Any, ClassVar, Dict, List, Literal, Self, Set
 
 import yaml
+
 # --------------------------------------------------------------------------- #
 from app import ChildrenUser, KindObject, fields, util
 from app.auth import functools
 from app.config import BaseHashable
-from app.schemas import (AsOutput, AssignmentSchema, CollectionSchema,
-                         DocumentSchema, computed_field, mwargs)
+from app.schemas import (
+    AsOutput,
+    AssignmentSchema,
+    CollectionSchema,
+    DocumentSchema,
+    computed_field,
+    mwargs,
+)
 from client import Config as ClientConfig
 from client.config import YamlSettingsConfigDict
 from client.handlers import RequestHandlerData, TypeAdapter, typer
@@ -49,8 +56,13 @@ class TextDocumentConfig(BaseObjectConfig):
         ),
     ]
     description: fields.FieldDescription
-    format_in: Literal[snippets.Format.rst, snippets.Format.css]
-    format_out: Literal[snippets.Format.rst, snippets.Format.css, snippets.Format.html]
+    format_in: Literal[snippets.Format.rst, snippets.Format.css, snippets.Format.svg]
+    format_out: Literal[
+        snippets.Format.rst,
+        snippets.Format.css,
+        snippets.Format.html,
+        snippets.Format.svg,
+    ]
 
     def create_content(self, filepath: str) -> Dict[str, Any]:
         logger.debug("Building content for `%s`.", filepath)
@@ -61,9 +73,10 @@ class TextDocumentConfig(BaseObjectConfig):
         match (self.format_in, self.format_out):
             case (snippets.Format.rst, snippets.Format.html):
                 content = str(publish_parts(content, writer_name="html")["html_body"])
-            case (snippets.Format.css, snippets.Format.css) | (
-                snippets.Format.rst,
-                snippets.Format.rst,
+            case (
+                (snippets.Format.css, snippets.Format.css)
+                | (snippets.Format.rst, snippets.Format.rst)
+                | (snippets.Format.svg, snippets.Format.svg)
             ):
                 ...
             case _:
@@ -107,7 +120,7 @@ class TextDataConfig(BaseHashable):
     ]
     path_docs: str
     template_file: Annotated[
-        str | None, 
+        str | None,
         Field(description="Template to render ``html`` into.", default=None),
     ]
 

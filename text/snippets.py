@@ -17,6 +17,18 @@ logger = util.get_logger(__name__)
 
 
 class Format(str, enum.Enum):
+    """It is important to consider what should and should not be stored.
+
+    For instance it might not be great to accept arbitrary ``HTML`` inputs
+    since they could be used to execute whatever code they want in the browser.
+
+    The way things are set up now, only those running the captura text
+    extension should have access to this functionality - that is, the server
+    admin is responsible for the content served by this application (which
+    is, for the moment, a captura client and not truely an extension).
+    """
+
+    svg = "svg"
     css = "css"
     html = "html"
     md = "md"

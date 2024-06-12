@@ -171,6 +171,9 @@ class TextView(BaseView):
 
             wrapped = template.format(document=data.data, body=text["content"])
             return HTMLResponse(wrapped)
+        elif format == "svg":
+            content = text["content"]
+            return Response(content, media_type="image/svg+xml")
         else:
             content = text["content"]
             return PlainTextResponse(
