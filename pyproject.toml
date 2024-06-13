@@ -1,1 +1,31 @@
 # NOTE: Packaging on hold until app publishes to pypi.
+
+[build-system]
+requires = ["setuptools >= 40.6.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+
+[project]
+authors = [{name = "Adrian Cederberg", email = "adrn.cederberg123@gmail.com"}, ]
+name = "captura-text"
+version = "0.0.0"
+description = "A captura plugin for runing static like sites."
+readme = "README.rst"
+keywords = ["captura", "text", "web", "api", "rst", "markdown"]
+
+
+classifiers = [
+    'Programming Language :: Python',
+    'Programming Language :: Python :: 3',
+    'Programming Language :: Python :: 3 :: Only',
+    'Programming Language :: Python :: 3.11',
+    'Intended Audience :: Developers',
+    'Topic :: Internet',
+]
+
+
+dependencies = [
+  "docutils",
+]
+
+

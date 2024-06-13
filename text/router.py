@@ -11,14 +11,12 @@ from traceback import print_tb
 from typing import Annotated
 
 from app.schemas import AsOutput, DocumentSchema, mwargs
-from app.views.base import BaseView, Jinja2Templates
+from app.views.base import BaseView
 from client import Requests
-from client.handlers import AssertionHandler, ConsoleHandler
+from client.handlers import ConsoleHandler
 from client.requests import httpx
-from docutils.core import publish_string
-from fastapi import Depends, HTTPException, Request, Response
-from fastapi.responses import FileResponse, PlainTextResponse
-from jinja2 import Template
+from fastapi import Depends, HTTPException, Response
+from fastapi.responses import PlainTextResponse
 from pydantic import TypeAdapter
 from starlette.responses import HTMLResponse
 
@@ -28,9 +26,7 @@ from text.schemas import (
     BuilderConfig,
     Config,
     TextBuilderStatus,
-    here,
 )
-from text.snippets import Format
 
 TEMPLATE = """
 <html>
