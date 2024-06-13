@@ -1,5 +1,5 @@
 import enum
-from typing import Annotated, List
+from typing import Annotated, List, Literal
 
 # --------------------------------------------------------------------------- #
 from app import fields, util
@@ -41,6 +41,63 @@ class Format(str, enum.Enum):
 FieldFormat = Annotated[
     Format,
     Field(default=Format.md, description="Text document format."),
+]
+FieldFormatIn = Annotated[
+    Literal[Format.rst, Format.css, Format.svg],
+    Field(),
+]
+FieldFormatOut = Annotated[
+    Literal[
+        Format.rst,
+        Format.css,
+        Format.html,
+        Format.svg,
+    ],
+    Field(),
+]
+FieldTemplateFile = Annotated[
+    str | None,
+    Field(description="Template to render ``html`` into.", default=None),
+]
+
+FieldIdentifier = Annotated[
+    str,
+    Field(
+        description=(
+            "This value should be a random string, for instance one "
+            "generated like "
+            "`python -c 'import secrets; print(secrets.token_urlsafe());'`."
+            "Identifier for this batch of documents and their collection."
+            "The ``collection_name`` field actually results in a collection"
+            "having the name with the identifier at the end."
+        )
+    ),
+]
+FieldName = Annotated[
+    str,
+    Field(
+        description=(
+            "The name to give this object. For the actual name in "
+            "captura, see ``name_captura``."
+        )
+    ),
+]
+FieldDescription = Annotated[
+    str,
+    Field(description="The description to give this object."),
+]
+FieldContentFile = Annotated[
+    str,
+    Field(
+        description=(
+            "This should be a path relative to the root directory or an "
+            "absolute path."
+        ),
+    ),
+]
+FieldPathDocs = Annotated[
+    str,
+    Field(description="Path to the directory containing the documents to be rendered."),
 ]
 
 

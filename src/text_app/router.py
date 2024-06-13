@@ -7,24 +7,22 @@ your ``.text.status.yaml`` and use its contents to deploy this app.
 """
 
 from os import path
-from traceback import print_tb
 from typing import Annotated
 
+from app import Document
+from app.depends import DependsAsyncSessionMaker, DependsSessionMaker
+from app.models import User
 from app.schemas import AsOutput, DocumentSchema, mwargs
 from app.views.base import BaseView
-from client import Requests
-from client.handlers import ConsoleHandler
-from client.requests import httpx
 from fastapi import Depends, HTTPException, Response
 from fastapi.responses import PlainTextResponse
 from pydantic import TypeAdapter
+from sqlalchemy import select
 from starlette.responses import HTMLResponse
 
-from text.controller import ContextData, TextOptions
-from text.schemas import (
+from text_app.schemas import (
     PATH_CONFIGS_BUILDER_DEFAULT,
     BuilderConfig,
-    Config,
     TextBuilderStatus,
 )
 
@@ -43,11 +41,6 @@ TEMPLATE = """
 
 
 # --------------------------------------------------------------------------- #
-def config() -> Config:
-    return mwargs(Config)
-
-
-DependsConfig = Annotated[Config, Depends(config, use_cache=True)]
 
 
 def text() -> BuilderConfig:
@@ -65,24 +58,6 @@ def status(text: DependsBuilder) -> TextBuilderStatus:
 
 
 DependsTextBuilderStatus = Annotated[TextBuilderStatus, Depends(status, use_cache=True)]
-
-
-def context(config: DependsConfig, text: DependsBuilder) -> ContextData:
-    try:
-        console_handler = ConsoleHandler(config=config)
-        return ContextData(
-            config=config,
-            text=text,
-            console_handler=console_handler,
-            options=TextOptions(names=None),
-        )  # type: ignore
-    except Exception as err:
-        print_tb(err.__traceback__)
-        print(err)
-        raise err
-
-
-DependsContext = Annotated[ContextData, Depends(context, use_cache=True)]
 
 
 def template(text: DependsBuilder) -> str:
@@ -113,9 +88,9 @@ class TextView(BaseView):
     #       against the name provided in ``config``, not the actual name with
     #       the attached identifier.
     @classmethod
-    async def get_by_name_json(
+    def get_by_name_json(
         cls,
-        context: DependsContext,
+        sessionmaker: DependsSessionMaker,
         status: DependsTextBuilderStatus,
         *,
         name: str,
@@ -125,28 +100,17 @@ class TextView(BaseView):
         if (data := status.status.get(name)) is None:
             raise HTTPException(404, detail="No such document.")
 
-        async with httpx.AsyncClient() as client:
-            requests = Requests(context, client)
-            res = await requests.documents.read(data.uuid)
+        with sessionmaker() as session:
+            q = select(Document).where(Document.uuid == data.uuid)
+            document = session.scalar(q)
 
-        # NOTE: At some point this should be written as a handler instead.
-        if 200 <= res.status_code < 300:
-            final = TypeAdapter(AsOutput[DocumentSchema]).validate_json(res.content)
-            return final
-
-        captura_detail = res.json()
-        raise HTTPException(
-            res.status_code,
-            detail={
-                "captura_detail": captura_detail,
-                "captura_instance": context.config.host.host,
-            },
-        )
+        document_out = DocumentSchema.model_validate(document)
+        return mwargs(AsOutput, data=document_out)
 
     @classmethod
-    async def get_by_name(
+    def get_by_name(
         cls,
-        context: DependsContext,
+        sessionmaker: DependsSessionMaker,
         status: DependsTextBuilderStatus,
         template: DependsTemplate,
         *,
@@ -156,15 +120,14 @@ class TextView(BaseView):
 
         # NOTE: These documents should be built before, not `on the fly`. Allk
         #       document building should happen outside of app run.
-        data = await cls.get_by_name_json(
-            context,
+        data = cls.get_by_name_json(
+            sessionmaker,
             status,
             name=name,
         )
 
         text = data.data.content["text"]
         if (format := text["format"]) == "html":
-
             wrapped = template.format(document=data.data, body=text["content"])
             return HTMLResponse(wrapped)
         elif format == "svg":
