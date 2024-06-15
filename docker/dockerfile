@@ -1,0 +1,6 @@
+FROM acederberg/captura:c78428682ea98f3f05e643b0a64852577a18585e AS production
+
+COPY . ./plugins/text
+COPY ./docker/plugin.yaml .
+RUN bash /home/captura/docker.sh plugins
+

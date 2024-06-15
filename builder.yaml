@@ -1,0 +1,12 @@
+options:
+  tier: api
+git:
+  repository: ssh://git@github.com/acederberg/captura-text.git
+  branch: master
+  dockerfile: docker/dockerfile
+  dockertarget: production
+  pull: true
+image:
+  target: production
+  repository: captura-text
+
