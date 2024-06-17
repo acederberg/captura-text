@@ -21,7 +21,7 @@ from sqlalchemy import select
 from starlette.responses import HTMLResponse
 
 from text_app.schemas import (
-    PATH_CONFIGS_BUILDER_DEFAULT,
+    PATH_TEXT_CONFIG,
     BuilderConfig,
     TextBuilderStatus,
 )
@@ -44,7 +44,7 @@ TEMPLATE = """
 
 
 def text() -> BuilderConfig:
-    return BuilderConfig.load(PATH_CONFIGS_BUILDER_DEFAULT)
+    return BuilderConfig.load(PATH_TEXT_CONFIG)
 
 
 DependsBuilder = Annotated[BuilderConfig, Depends(text, use_cache=True)]

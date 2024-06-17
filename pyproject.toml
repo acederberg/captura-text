@@ -62,6 +62,7 @@ push            = false
 [tool.bumpver.file_patterns]
 "pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
 "src/text_app/__init__.py" = ["{version}"]
+"docker/docker-compose.yaml" = ["image: acederberg/captura-text/development:{version}"]
 
 
 [tool.black]

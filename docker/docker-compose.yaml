@@ -1,0 +1,20 @@
+services:
+  text:
+    build:
+      context: '..'
+      dockerfile: './docker/dockerfile'
+      target: production
+    image: acederberg/captura-text/development:0.0.0
+    #      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  
+    #      NOTE: Do not modify unless pyproject.toml is also updated.
+    container_name: captura-text-server
+    ports: 
+      - target: 8080
+        published: 8080
+    tty: true
+    volumes:
+      - ../configs/app.yaml:/home/captura/.captura/app.yaml
+      - ../configs/client.yaml:/home/captura/.captura/client.yaml
+      - ../docs/text.yaml:/home/captura/.captura/text.yaml
+      - ../docs/.text.status.yaml:/home/captura/.captura/text.status.yaml
+

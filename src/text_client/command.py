@@ -1,3 +1,4 @@
+# =========================================================================== #
 import asyncio
 import os
 from os import path
@@ -10,19 +11,18 @@ import uvicorn.config
 from app import util
 from app.schemas import mwargs
 from client import BaseTyperizable, ContextData
-
-# --------------------------------------------------------------------------- #
 from client.handlers import CONSOLE, BaseHandlerData
 from client.requests import Requests
 
+# --------------------------------------------------------------------------- #
 from text_app.schemas import (
-    PATH_CONFIGS_BUILDER_DEFAULT,
+    PATH_TEXT_CONFIG,
+    PATH_TEXT_STATUS,
     BuilderConfig,
     TextBuilderStatus,
 )
 from text_client.controller import TextController, TextOptions, update_status_file
 
-# --------------------------------------------------------------------------- #
 logger = util.get_logger(__name__)
 
 
@@ -42,9 +42,7 @@ class TextCommands(BaseTyperizable):
     async def _up(
         cls,
         _context: typer.Context,
-        text_file: Annotated[
-            str, typer.Option("--text")
-        ] = PATH_CONFIGS_BUILDER_DEFAULT,
+        text_file: Annotated[str, typer.Option("--text")] = PATH_TEXT_CONFIG,
     ):
         # data = [item.model_dump(mode="json") for item in context.config.items]
         # context.console_handler.handle(handler_data=handler_data)  # type: ignore
@@ -72,9 +70,7 @@ class TextCommands(BaseTyperizable):
     async def _patch(
         cls,
         _context: typer.Context,
-        text_file: Annotated[
-            str, typer.Option("--text")
-        ] = PATH_CONFIGS_BUILDER_DEFAULT,
+        text_file: Annotated[str, typer.Option("--text")] = PATH_TEXT_CONFIG,
     ):
         # data = [item.model_dump(mode="json") for item in context.config.items]
         # context.console_handler.handle(handler_data=handler_data)  # type: ignore
@@ -102,9 +98,7 @@ class TextCommands(BaseTyperizable):
     async def _down(
         cls,
         _context: typer.Context,
-        text_file: Annotated[
-            str, typer.Option("--text")
-        ] = PATH_CONFIGS_BUILDER_DEFAULT,
+        text_file: Annotated[str, typer.Option("--text")] = PATH_TEXT_CONFIG,
     ):
 
         context_data: ContextData = _context.obj
@@ -124,21 +118,35 @@ class TextCommands(BaseTyperizable):
     def down(cls, _context: typer.Context):
         asyncio.run(cls._down(_context))
 
+    # @classmethod
+    # def env():
+    #
+    #     CONSOLE.print_json(
+    #     )
+
     @classmethod
     def config(
         cls,
         _context: typer.Context,
-        text_file: Annotated[
-            str, typer.Option("--text")
-        ] = PATH_CONFIGS_BUILDER_DEFAULT,
+        text_file: Annotated[str, typer.Option("--text")] = PATH_TEXT_CONFIG,
+        env: Annotated[bool, typer.Option("--only-env/--only-config")] = False,
     ):
         context_data: ContextData = _context.obj
 
-        if text_file is None:
-            include = {"host", "profile", "output"}
-            config_data = context_data.config.model_dump(mode="json", include=include)
+        if not env:
+            if text_file is None:
+                include = {"host", "profile", "output"}
+                config_data = context_data.config.model_dump(
+                    mode="json", include=include
+                )
+            else:
+                config_data = context_data.text.model_dump(mode="json")
         else:
-            config_data = context_data.text.model_dump(mode="json")
+            config_data = {
+                "text_docs": PATH_TEXT_STATUS,
+                "text_status": PATH_TEXT_STATUS,
+                "text_config": PATH_TEXT_CONFIG,
+            }
 
         handler_data = BaseHandlerData(data=config_data)
         context_data.console_handler.handle(handler_data=handler_data)
@@ -147,9 +155,7 @@ class TextCommands(BaseTyperizable):
     def status(
         cls,
         _context: typer.Context,
-        text_file: Annotated[
-            str, typer.Option("--text")
-        ] = PATH_CONFIGS_BUILDER_DEFAULT,
+        text_file: Annotated[str, typer.Option("--text")] = PATH_TEXT_CONFIG,
     ):
         context_data: ContextData = _context.obj
         text = BuilderConfig.load(text_file)

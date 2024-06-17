@@ -21,7 +21,7 @@ from pydantic import Field, TypeAdapter
 
 from text_app.schemas import (
     DESC_NAMES,
-    PATH_CONFIGS_BUILDER_DEFAULT,
+    PATH_TEXT_CONFIG,
     BuilderConfig,
     TextBuilderStatus,
     TextCollectionStatus,
@@ -293,7 +293,7 @@ class TextContextData(BaseHashable):
         text_config: Annotated[
             str,
             typer.Option("--config-text"),
-        ] = PATH_CONFIGS_BUILDER_DEFAULT,
+        ] = PATH_TEXT_CONFIG,
         names: Annotated[
             List[str] | None,
             typer.Option("--name", help=DESC_NAMES),
