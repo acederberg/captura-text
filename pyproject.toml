@@ -29,3 +29,57 @@ dependencies = [
 ]
 
 
+[tool.setuptools.packages.find]
+where = ["src"]
+
+
+[project.optional-dependencies]
+ci = [
+  "bumpver",
+  "twine",
+]
+dev = [
+	"black",
+	"flake8",
+	"mypy",
+	"isort",
+  "autoflake",
+  "jedi-language-server",
+  "docker",
+  "yamllint",
+]
+
+
+[tool.bumpver]
+current_version = "0.0.0"
+version_pattern = "MAJOR.MINOR.PATCH"
+commit_message  = "Bump version {old_version} -> {new_version}"
+commit          = true
+tag             = true
+push            = false
+
+
+[tool.bumpver.file_patterns]
+"pyproject.toml" = ['current_version = "{version}"', 'version = "{version}"']
+"src/text_app/__init__.py" = ["{version}"]
+
+
+[tool.black]
+
+
+# NOTE: See the documentation for the various configuration fields here:
+#
+#       .. code:: txt
+#
+#           https://pycqa.github.io/isort/docs/configuration/options.html
+#
+# NOTE: Does not support multiline headings. Is not indempotent.
+[tool.isort]
+profile = "black"
+import_heading_stdlib = "=========================================================================== #"
+import_heading_firstparty = "--------------------------------------------------------------------------- #" #\n# Captura\n"
+skip = [".venv-local", ".venv"]
+src_paths = ["src", "tests"]
+
+
+
