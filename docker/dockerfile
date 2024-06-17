@@ -1,12 +1,18 @@
-FROM acederberg/captura:54adca4cec3cf2b95f049da6025d190244a5632a AS production
+FROM acederberg/captura:54adca4cec3cf2b95f049da6025d190244a5632a AS base
 
 ENV CAPTURA_HOOKS="/home/captura/.captura/hooks.py" \
   CAPTURA_TEXT_STATUS="/home/captura/.captura/text.status.yaml" \
   CAPTURA_TEXT_CONFIG="/home/captura/.captura/text.yaml" 
 
-COPY --chown=captura:captura . ./plugins/text
 COPY --chown=captura:captura ./docker/hooks.py /home/captura/.captura/hooks.py
 COPY --chown=captura:captura ./docker/plugin.yaml .
+
+
+FROM base AS development
+ENTRYPOINT ["sh"]
+
+
+FROM base AS production
+COPY --chown=captura:captura . ./plugins/text
 RUN bash /home/captura/docker.sh plugins >> /home/captura/.captura/logs/ci.log
 
-# ENTRYPOINT ["sh"]

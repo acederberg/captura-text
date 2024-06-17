@@ -1,3 +1,4 @@
+# --------------------------------------------------------------------------- #
 from text_client.command import TextCommands
 
 __all__ = ("TextCommands",)

@@ -1,8 +1,7 @@
 # =========================================================================== #
 import asyncio
 import os
-from os import path
-from typing import Annotated, List, Optional
+from typing import Annotated
 
 import httpx
 import typer
@@ -15,12 +14,8 @@ from client.handlers import CONSOLE, BaseHandlerData
 from client.requests import Requests
 
 # --------------------------------------------------------------------------- #
-from text_app.schemas import (
-    PATH_TEXT_CONFIG,
-    PATH_TEXT_STATUS,
-    BuilderConfig,
-    TextBuilderStatus,
-)
+from text_app.fields import PATH_TEXT_CONFIG, PATH_TEXT_DOCS, PATH_TEXT_STATUS_DEFAULT
+from text_app.schemas import BuilderConfig, TextBuilderStatus
 from text_client.controller import TextController, TextOptions, update_status_file
 
 logger = util.get_logger(__name__)
@@ -77,12 +72,12 @@ class TextCommands(BaseTyperizable):
 
         context_data: ContextData = _context.obj
         text = BuilderConfig.load(text_file)
-        resume_handler = TextController(context_data, text)
+        resume_handler = TextController(context_data.config, text)
 
         async with httpx.AsyncClient() as client:
             requests = Requests(context_data, client)
             status = await resume_handler.ensure(requests, TextOptions(names=None))
-            await resume_handler.update(requests, context_data.options)
+            await resume_handler.update(requests, mwargs(TextOptions))
 
         handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
         context_data.console_handler.handle(handler_data=handler_data)
@@ -103,16 +98,16 @@ class TextCommands(BaseTyperizable):
 
         context_data: ContextData = _context.obj
         text = BuilderConfig.load(text_file)
-        resume_handler = TextController(context_data, text)
+        resume_handler = TextController(context_data.config, text)
 
         async with httpx.AsyncClient() as client:
             requests = Requests(context_data, client)
-            status = await resume_handler.destroy(requests, context_data.options)
+            status = await resume_handler.destroy(requests, mwargs(TextOptions))
 
         handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
         context_data.console_handler.handle(handler_data=handler_data)
 
-        os.remove(context_data.text.path_status)
+        os.remove(text.path_status)
 
     @classmethod
     def down(cls, _context: typer.Context):
@@ -132,6 +127,7 @@ class TextCommands(BaseTyperizable):
         env: Annotated[bool, typer.Option("--only-env/--only-config")] = False,
     ):
         context_data: ContextData = _context.obj
+        text = BuilderConfig.load(text_file)
 
         if not env:
             if text_file is None:
@@ -140,11 +136,11 @@ class TextCommands(BaseTyperizable):
                     mode="json", include=include
                 )
             else:
-                config_data = context_data.text.model_dump(mode="json")
+                config_data = text.model_dump(mode="json")
         else:
             config_data = {
-                "text_docs": PATH_TEXT_STATUS,
-                "text_status": PATH_TEXT_STATUS,
+                "text_docs": PATH_TEXT_DOCS,
+                "text_status_default": PATH_TEXT_STATUS_DEFAULT,
                 "text_config": PATH_TEXT_CONFIG,
             }
 

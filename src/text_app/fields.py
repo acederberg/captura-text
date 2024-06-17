@@ -1,16 +1,32 @@
+# =========================================================================== #
 import enum
+from os import path
 from typing import Annotated, List, Literal
 
-# --------------------------------------------------------------------------- #
 from app import fields, util
 from pydantic import BaseModel, Field
 
-# --------------------------------------------------------------------------- #
 # FROM extensions/text.py
 
 LENGTH_MESSAGE: int = 1024
 LENGTH_CONTENT: int = 2**18
 LENGTH_FORMAT: int = 8
+
+
+PATH_HERE = path.realpath(path.join(path.dirname(__file__), "..", ".."))
+PATH_TEXT_DOCS = util.from_env(
+    "TEXT_DOCS",
+    path.join(PATH_HERE, "docs"),
+)
+
+_PATH_TEXT_STATUS_DEFAULT = util.from_env("TEXT_STATUS", "")
+PATH_TEXT_STATUS_DEFAULT: None | str = (
+    None if not _PATH_TEXT_STATUS_DEFAULT else _PATH_TEXT_STATUS_DEFAULT
+)
+PATH_TEXT_CONFIG = util.from_env(
+    "TEXT_CONFIG",
+    path.join(PATH_TEXT_DOCS, "text.yaml"),
+)
 
 
 logger = util.get_logger(__name__)
@@ -97,7 +113,11 @@ FieldContentFile = Annotated[
 ]
 FieldPathDocs = Annotated[
     str,
-    Field(description="Path to the directory containing the documents to be rendered."),
+    Field(
+        description="Path to the directory containing the documents to be rendered.",
+        default=PATH_TEXT_DOCS,
+        validate_default=True,
+    ),
 ]
 
 

@@ -1,5 +1,7 @@
-from text_client.command import TextCommands
 from client.requests.base import typerize
+
+# --------------------------------------------------------------------------- #
+from text_client import TextCommands
 
 
 def main():
@@ -7,3 +9,7 @@ def main():
 
     cmd = typerize(TextCommands)
     cmd()
+
+
+if __name__ == "__main__":
+    main()

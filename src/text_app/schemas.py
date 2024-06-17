@@ -18,28 +18,13 @@ from text_app import fields
 
 logger = util.get_logger(__name__)
 
-PATH_HERE = path.realpath(path.join(path.dirname(__file__), "..", ".."))
-
-
-PATH_TEXT_DOCS = util.from_env(
-    "TEXT_DOCS",
-    path.join(PATH_HERE, "docs"),
-)
-PATH_TEXT_STATUS = util.from_env(
-    "TEXT_STATUS",
-    path.join(PATH_TEXT_DOCS, ".text.status.yaml"),
-)
-PATH_TEXT_CONFIG = util.from_env(
-    "TEXT_CONFIG",
-    path.join(PATH_TEXT_DOCS, "text.yaml"),
-)
 
 DESC_NAMES = "Document names to filter by. Uses the names specified in ``text.yaml``."
 DESC_FORMAT = "Formats to filter by."
 
 
 def here(*v: str):
-    return path.join(PATH_HERE, *v)
+    return path.join(fields.PATH_HERE, *v)
 
 
 class BaseObjectConfig(BaseHashable):
@@ -94,7 +79,7 @@ class TextCollectionConfig(BaseObjectConfig):
 
 class TextDataConfig(BaseHashable):
 
-    path_docs: str
+    path_docs: fields.FieldPathDocs
     template_file: fields.FieldTemplateFile
     identifier: fields.FieldIdentifier
     collection: TextCollectionConfig
@@ -179,11 +164,13 @@ class TextBuilderStatus(BaseYaml, BaseHashable):
 
 
 class BuilderConfig(BaseYaml, BaseHashable):
-    model_config = YamlSettingsConfigDict(yaml_files=PATH_TEXT_CONFIG)
+    model_config = YamlSettingsConfigDict(yaml_files=fields.PATH_TEXT_CONFIG)
 
     @computed_field
     @functools.cached_property
     def path_status(self) -> str:
+        if (p := fields.PATH_TEXT_STATUS_DEFAULT) is not None:
+            return p
         return path.join(self.data.path_docs, ".text.status.yaml")
 
     @computed_field

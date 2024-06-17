@@ -6,6 +6,7 @@ add your documents to a captura instance. Once this command has been run, find
 your ``.text.status.yaml`` and use its contents to deploy this app.
 """
 
+# =========================================================================== #
 from os import path
 from typing import Annotated
 
@@ -20,11 +21,9 @@ from pydantic import TypeAdapter
 from sqlalchemy import select
 from starlette.responses import HTMLResponse
 
-from text_app.schemas import (
-    PATH_TEXT_CONFIG,
-    BuilderConfig,
-    TextBuilderStatus,
-)
+# --------------------------------------------------------------------------- #
+from text_app.fields import PATH_TEXT_CONFIG
+from text_app.schemas import BuilderConfig, TextBuilderStatus
 
 TEMPLATE = """
 <html>
@@ -103,6 +102,9 @@ class TextView(BaseView):
         with sessionmaker() as session:
             q = select(Document).where(Document.uuid == data.uuid)
             document = session.scalar(q)
+
+        if document is None:
+            raise HTTPException(404)
 
         document_out = DocumentSchema.model_validate(document)
         return mwargs(AsOutput, data=document_out)

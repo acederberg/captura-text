@@ -1,3 +1,4 @@
+# =========================================================================== #
 import asyncio
 from os import path
 from typing import Annotated, Dict, Generator, List
@@ -19,9 +20,10 @@ from client.handlers import RequestHandlerData
 from client.requests import Requests
 from pydantic import Field, TypeAdapter
 
+# --------------------------------------------------------------------------- #
+from text_app.fields import PATH_TEXT_CONFIG
 from text_app.schemas import (
     DESC_NAMES,
-    PATH_TEXT_CONFIG,
     BuilderConfig,
     TextBuilderStatus,
     TextCollectionStatus,
