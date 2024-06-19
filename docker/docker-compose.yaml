@@ -5,7 +5,7 @@ services:
       context: '..'
       dockerfile: './docker/dockerfile'
       target: development
-    image: acederberg/captura-text/development:0.0.0
+    image: acederberg/captura-text/development:0.1.0
     #      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  
     #      NOTE: Do not modify unless pyproject.toml is also updated.
     container_name: captura-text-server
