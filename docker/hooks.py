@@ -7,7 +7,7 @@ from app.views import AppView
 def captura_plugins_app(app_view: Type[AppView]):
 
     # --------------------------------------------------------------------------- #
-    from text_app import TextView
+    from text_app.router import TextView
 
     app_view.view_router.include_router(TextView.view_router, prefix="/text")
 

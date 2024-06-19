@@ -78,6 +78,7 @@ class TextCollectionConfig(BaseObjectConfig):
 
 
 class TextDataConfig(BaseHashable):
+    hashable_fields_exclude = {"documents"}
 
     path_docs: fields.FieldPathDocs
     template_file: fields.FieldTemplateFile
@@ -117,6 +118,8 @@ class TextCollectionStatus(BaseObjectStatus, TextCollectionConfig): ...
 
 
 class TextDataStatus(BaseHashable):
+    hashable_fields_exclude = {"documents"}
+
     documents: Dict[str, TextDocumentStatus]
     collection: TextCollectionStatus
     path_docs: fields.FieldPathDocs
@@ -149,6 +152,8 @@ class TextBuilderStatus(BaseYaml, BaseHashable):
     This is created by ``text up`` and then used by ``router.py`` to decide
     which documents to render.
     """
+
+    hashable_fields_exclude = {"history"}
 
     status: Annotated[
         TextDataStatus,

@@ -1,3 +1,4 @@
+name: captura-text
 services:
   text:
     build:
@@ -10,7 +11,7 @@ services:
     container_name: captura-text-server
     ports: 
       - target: 8080
-        published: 8080
+        published: 80
     tty: true
     volumes:
       - ..:/home/captura/app/plugins/text
@@ -18,4 +19,5 @@ services:
       - ../configs/client.yaml:/home/captura/.captura/client.yaml
       - ../docs/text.yaml:/home/captura/.captura/text.yaml
       - ../docs/.text.status.yaml:/home/captura/.captura/text.status.yaml
+      - ../logging.yaml:/home/captura/.captura/logging.yaml
 

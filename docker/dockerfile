@@ -1,4 +1,4 @@
-FROM acederberg/captura:54adca4cec3cf2b95f049da6025d190244a5632a AS base
+FROM acederberg/captura:0.1.3-alpha AS base
 
 ENV CAPTURA_HOOKS="/home/captura/.captura/hooks.py" \
   CAPTURA_TEXT_STATUS="/home/captura/.captura/text.status.yaml" \
