@@ -1,0 +1,9 @@
+#!/bin/bash
+
+export PATH="$PATH:/home/captura/.local/bin"
+
+hascapturatext=$( pip list | grep captura-text | wc --lines )
+if [[ 0 -eq $hascapturatext ]]; then 
+  echo "Installing \`captura-text\`."
+  pip install --editable ./plugins/text
+fi

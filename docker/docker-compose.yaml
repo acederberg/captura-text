@@ -9,15 +9,20 @@ services:
     #      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  
     #      NOTE: Do not modify unless pyproject.toml is also updated.
     container_name: captura-text-server
+    environment:
+      - CAPTURA_APP__ENVIRONMENT=development
     ports: 
       - target: 8080
         published: 80
     tty: true
     volumes:
-      - ..:/home/captura/app/plugins/text
       - ../configs/app.yaml:/home/captura/.captura/app.yaml
       - ../configs/client.yaml:/home/captura/.captura/client.yaml
       - ../docs/text.yaml:/home/captura/.captura/text.yaml
       - ../docs/.text.status.yaml:/home/captura/.captura/text.status.yaml
       - ../logging.yaml:/home/captura/.captura/logging.yaml
+      - ..:/home/captura/app/plugins/text
+      # NOTE: Venv to avoid annoying reinstalls.
+      # - .venv:/home/captura/.venv
+      # - /home/captura/app/plugins/text/docker/.venv
 

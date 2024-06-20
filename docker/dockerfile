@@ -1,3 +1,5 @@
+# NOTE: The build should happen in the context of the root directory.
+#       All paths should be written relative to the root in directives.
 FROM acederberg/captura:0.1.3-alpha AS base
 
 ENV CAPTURA_HOOKS="/home/captura/.captura/hooks.py" \
@@ -9,7 +11,8 @@ COPY --chown=captura:captura ./docker/plugin.yaml .
 
 
 FROM base AS development
-ENTRYPOINT ["sh"]
+COPY ./docker/bashrc /home/captura/.bashrc
+ENTRYPOINT ["bash"]
 
 
 FROM base AS production

@@ -83,7 +83,7 @@ class TextCommands(BaseTyperizable):
         context_data.console_handler.handle(handler_data=handler_data)
 
         status = mwargs(TextBuilderStatus, status=status)
-        update_status_file(status, context_data.text.path_status)
+        update_status_file(status, text.path_status)
 
     @classmethod
     def patch(cls, _context: typer.Context):

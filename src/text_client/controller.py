@@ -167,7 +167,7 @@ async def update_document(
 
     item = status.require(name)
     name_captura = f"{name}-{status.identifier}-{item.format_out.name}"
-    status = 200
+    expect_status = 200
     filename = path.join(status.path_docs, item.content_file)
     content = item.create_content(filename)
 
@@ -180,7 +180,7 @@ async def update_document(
 
     adptr_search = TypeAdapter(AsOutput[DocumentSchema])
     (_,), err = requests.handler.check_status(
-        res, expect_status=status, adapter=adptr_search
+        res, expect_status=expect_status, adapter=adptr_search
     )
     if err is not None:
         raise err
@@ -199,7 +199,7 @@ async def update_collection(
     """
     name_captura = f"{status.collection.name}-{status.identifier}"
 
-    status = 200
+    expect_status = 200
 
     res = await requests.c.update(
         status.collection.uuid,
@@ -208,7 +208,9 @@ async def update_collection(
     )
 
     adptr = TypeAdapter(AsOutput[CollectionSchema])
-    (_,), err = requests.handler.check_status(res, expect_status=status, adapter=adptr)
+    (_,), err = requests.handler.check_status(
+        res, expect_status=expect_status, adapter=adptr
+    )
     if err is not None:
         raise err
 
