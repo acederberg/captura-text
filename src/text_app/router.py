@@ -97,7 +97,6 @@ def get_by_name_json(
 ) -> HashableDocumentOutput:
     """Get JSON data for the document."""
 
-    print(sessionmaker)
     logger.info("Finding captura document for text ``%s``.", name)
     if (data := status.status.get(name)) is None:
         raise HTTPException(404, detail="No such document.")

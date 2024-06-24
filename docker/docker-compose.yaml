@@ -5,6 +5,8 @@ services:
       context: '..'
       dockerfile: './docker/dockerfile'
       target: development
+      # args:
+      #   CAPTURA_HOOKS_PY: "./docs/hooks.py"
     image: acederberg/captura-text/development:0.1.0
     #      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  
     #      NOTE: Do not modify unless pyproject.toml is also updated.
@@ -21,8 +23,6 @@ services:
       - ../docs/text.yaml:/home/captura/.captura/text.yaml
       - ../docs/.text.status.yaml:/home/captura/.captura/text.status.yaml
       - ../logging.yaml:/home/captura/.captura/logging.yaml
-      - ..:/home/captura/app/plugins/text
-      # NOTE: Venv to avoid annoying reinstalls.
-      # - .venv:/home/captura/.venv
-      # - /home/captura/app/plugins/text/docker/.venv
 
+      - ..:/home/captura/app/plugins/text
+      - ../docs:/home/captura/app/plugins/docs
