@@ -20,6 +20,8 @@ from text_client.controller import TextController, TextOptions, update_status_fi
 
 logger = util.get_logger(__name__)
 
+FlagVerbose = Annotated[bool, typer.Option("--verbose/--silent")]
+
 
 class TextCommands(BaseTyperizable):
     typer_check_verbage = False
@@ -38,6 +40,7 @@ class TextCommands(BaseTyperizable):
         cls,
         _context: typer.Context,
         text_file: Annotated[str, typer.Option("--text")] = PATH_TEXT_CONFIG,
+        verbose: FlagVerbose = False,
     ):
         # data = [item.model_dump(mode="json") for item in context.config.items]
         # context.console_handler.handle(handler_data=handler_data)  # type: ignore
@@ -52,7 +55,8 @@ class TextCommands(BaseTyperizable):
             status = await resume_handler.ensure(requests)
 
         handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
-        context_data.console_handler.handle(handler_data=handler_data)
+        if verbose:
+            context_data.console_handler.handle(handler_data=handler_data)
 
         status = mwargs(TextBuilderStatus, status=status)
         update_status_file(status, text.path_status)
@@ -66,6 +70,7 @@ class TextCommands(BaseTyperizable):
         cls,
         _context: typer.Context,
         text_file: Annotated[str, typer.Option("--text")] = PATH_TEXT_CONFIG,
+        verbose: FlagVerbose = False,
     ):
         # data = [item.model_dump(mode="json") for item in context.config.items]
         # context.console_handler.handle(handler_data=handler_data)  # type: ignore
@@ -80,7 +85,8 @@ class TextCommands(BaseTyperizable):
             await resume_handler.update(requests, mwargs(TextOptions))
 
         handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
-        context_data.console_handler.handle(handler_data=handler_data)
+        if verbose:
+            context_data.console_handler.handle(handler_data=handler_data)
 
         status = mwargs(TextBuilderStatus, status=status)
         update_status_file(status, text.path_status)
@@ -94,6 +100,7 @@ class TextCommands(BaseTyperizable):
         cls,
         _context: typer.Context,
         text_file: Annotated[str, typer.Option("--text")] = PATH_TEXT_CONFIG,
+        verbose: FlagVerbose = False,
     ):
 
         context_data: ContextData = _context.obj
@@ -105,7 +112,8 @@ class TextCommands(BaseTyperizable):
             status = await resume_handler.destroy(requests, mwargs(TextOptions))
 
         handler_data = BaseHandlerData(data=status.model_dump(mode="json"))
-        context_data.console_handler.handle(handler_data=handler_data)
+        if verbose:
+            context_data.console_handler.handle(handler_data=handler_data)
 
         os.remove(text.path_status)
 
