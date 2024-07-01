@@ -1,7 +1,7 @@
 # NOTE: The build should happen in the context of the root directory.
 #       All paths should be written relative to the root in directives.
 ARG CAPTURA_HOOKS_PY="./docker/hooks.py"
-FROM acederberg/captura:0.1.4-alpha AS base
+FROM acederberg/captura:0.1.5-alpha AS base
 
 ENV CAPTURA_HOOKS="/home/captura/.captura/hooks.py" \
   CAPTURA_TEXT_STATUS="/home/captura/.captura/text.status.yaml" \
