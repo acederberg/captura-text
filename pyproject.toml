@@ -8,7 +8,7 @@ build-backend = "setuptools.build_meta"
 [project]
 authors = [{name = "Adrian Cederberg", email = "adrn.cederberg123@gmail.com"}, ]
 name = "captura-text"
-version = "0.1.0"
+version = "0.1.1"
 description = "A captura plugin for runing static like sites."
 readme = "README.rst"
 keywords = ["captura", "text", "web", "api", "rst", "markdown"]
@@ -51,7 +51,7 @@ dev = [
 
 
 [tool.bumpver]
-current_version = "0.1.0"
+current_version = "0.1.1"
 version_pattern = "MAJOR.MINOR.PATCH"
 commit_message  = "Bump version {old_version} -> {new_version}"
 commit          = true

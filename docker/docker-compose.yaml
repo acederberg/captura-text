@@ -7,7 +7,7 @@ services:
       target: development
       # args:
       #   CAPTURA_HOOKS_PY: "./docs/hooks.py"
-    image: acederberg/captura-text/development:0.1.0
+    image: acederberg/captura-text/development:0.1.1
     #      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  
     #      NOTE: Do not modify unless pyproject.toml is also updated.
     container_name: captura-text-server
